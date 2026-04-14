@@ -1,25 +1,38 @@
 package com.tencent.supersonic.web;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
+    @Value("${s2.frontend.dist:}")
+    private String frontendDist;
+
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/webapp/**").addResourceLocations("classpath:/webapp/");
+        String webappPath;
 
-        registry.addResourceHandler("/favicon.ico").addResourceLocations("classpath:/webapp/");
+        if (frontendDist != null && !frontendDist.isEmpty()) {
+            Path distPath = Paths.get(frontendDist).toAbsolutePath();
+            webappPath = "file:" + distPath.toString() + "/";
+        } else {
+            webappPath = "file:./webapp/";
+        }
+
+        registry.addResourceHandler("/webapp/**").addResourceLocations(webappPath);
+
+        registry.addResourceHandler("/favicon.ico").addResourceLocations(webappPath);
     }
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
-        registry.addViewController("/").setViewName("redirect:/webapp/");
-        registry.addViewController("/webapp/").setViewName("forward:/webapp/index.html");
-        registry.addViewController("/webapp/**/{path:[^\\.]*}")
-                .setViewName("forward:/webapp/index.html");
+        registry.addViewController("/").setViewName("forward:/index.html");
     }
 }

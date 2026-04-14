@@ -7,7 +7,7 @@ server:
 
 spring:
   profiles:
-    active: ${S2_DB_TYPE:h2}
+    active: ${S2_DB_TYPE:local}
   application:
     name: chat
   config:
@@ -18,6 +18,16 @@ spring:
   mvc:
     pathmatch:
       matching-strategy: ANT_PATH_MATCHER
+  web:
+    resources:
+      static-locations:
+        - classpath:/static/
+        - classpath:/public/
+        - file:${S2_FRONTEND_DIST:E:/trae/supersonic/webapp/packages/supersonic-fe/dist}/
+
+s2:
+  frontend:
+    dist: ${S2_FRONTEND_DIST:E:/trae/supersonic/webapp/packages/supersonic-fe/dist}
 
 mybatis:
   mapper-locations=classpath:mappers/custom/*.xml,classpath*:/mappers/*.xml

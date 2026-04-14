@@ -10,7 +10,29 @@ public class EmbeddingModelConstant {
 
     public static final String BGE_SMALL_ZH = "bge-small-zh";
     public static final String ALL_MINILM_L6_V2 = "all-minilm-l6-v2-q";
-    public static final EmbeddingModel BGE_SMALL_ZH_MODEL = new BgeSmallZhEmbeddingModel();
-    public static final EmbeddingModel ALL_MINI_LM_L6_V2_MODEL =
-            new AllMiniLmL6V2QuantizedEmbeddingModel();
+
+    private volatile static EmbeddingModel bgeSmallZhModel;
+    private volatile static EmbeddingModel allMiniLmL6V2Model;
+
+    public static EmbeddingModel getBgeSmallZhModel() {
+        if (bgeSmallZhModel == null) {
+            synchronized (EmbeddingModelConstant.class) {
+                if (bgeSmallZhModel == null) {
+                    bgeSmallZhModel = new BgeSmallZhEmbeddingModel();
+                }
+            }
+        }
+        return bgeSmallZhModel;
+    }
+
+    public static EmbeddingModel getAllMiniLmL6V2Model() {
+        if (allMiniLmL6V2Model == null) {
+            synchronized (EmbeddingModelConstant.class) {
+                if (allMiniLmL6V2Model == null) {
+                    allMiniLmL6V2Model = new AllMiniLmL6V2QuantizedEmbeddingModel();
+                }
+            }
+        }
+        return allMiniLmL6V2Model;
+    }
 }

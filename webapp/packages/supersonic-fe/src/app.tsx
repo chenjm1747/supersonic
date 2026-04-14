@@ -124,14 +124,13 @@ export const layout: RunTimeLayoutConfig = (params) => {
     },
     logo: (
       <Space>
-        <S2Icon
-          icon={ICON.iconlogobiaoshi}
-          size={30}
-          color="#1672fa"
-          style={{ display: 'inline-block', marginTop: 8 }}
+        <img
+          src="/webapp/logo.svg"
+          alt="Logo"
+          style={{ height: 30, marginTop: 8 }}
         />
         <div className="logo" style={{ position: 'relative', top: '-2px' }}>
-          SuperSonic
+          供热收费客服数据分析平台
         </div>
       </Space>
     ),

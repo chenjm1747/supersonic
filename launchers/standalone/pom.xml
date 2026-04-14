@@ -147,14 +147,24 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>3.3.9</version>
+                <configuration>
+                    <mainClass>${start-class}</mainClass>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.4.2</version>
-                <configuration>
-                    <excludes>
-                        <exclude>*.*</exclude>
-                    </excludes>
-                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -162,7 +172,7 @@
                 <version>3.7.1</version>
                 <configuration>
                     <tarLongFileMode>gnu</tarLongFileMode>
-                    <skipAssembly>false</skipAssembly>
+                    <skipAssembly>true</skipAssembly>
                     <archive>
                         <manifest>
                             <mainClass>${start-class}</mainClass>

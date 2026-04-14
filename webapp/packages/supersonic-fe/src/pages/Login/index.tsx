@@ -93,13 +93,12 @@ const LoginPage: React.FC = () => {
               <div className={styles.loginMain}>
                 <h3 className={styles.title}>
                   <Space>
-                    <S2Icon
-                      icon={ICON.iconlogobiaoshi}
-                      size={30}
-                      color="#296DF3"
-                      style={{ display: 'inline-block', marginTop: 8 }}
+                    <img
+                      src="/webapp/logo.svg"
+                      alt="Logo"
+                      style={{ height: 30, marginTop: 8 }}
                     />
-                    <div>SuperSonic</div>
+                    <div>供热收费客服数据分析平台</div>
                   </Space>
                 </h3>
                 <Item name="name" rules={[{ required: true }]} label="">

@@ -28,12 +28,12 @@ public class InMemoryModelFactory implements ModelFactory, InitializingBean {
         }
         String modelName = embeddingModel.getModelName();
         if (EmbeddingModelConstant.BGE_SMALL_ZH.equalsIgnoreCase(modelName)) {
-            return EmbeddingModelConstant.BGE_SMALL_ZH_MODEL;
+            return EmbeddingModelConstant.getBgeSmallZhModel();
         }
         if (EmbeddingModelConstant.ALL_MINILM_L6_V2.equalsIgnoreCase(modelName)) {
-            return EmbeddingModelConstant.ALL_MINI_LM_L6_V2_MODEL;
+            return EmbeddingModelConstant.getAllMiniLmL6V2Model();
         }
-        return EmbeddingModelConstant.BGE_SMALL_ZH_MODEL;
+        return EmbeddingModelConstant.getBgeSmallZhModel();
     }
 
     @Override

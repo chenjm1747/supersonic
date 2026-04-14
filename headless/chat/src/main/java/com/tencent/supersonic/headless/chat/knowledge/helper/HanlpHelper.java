@@ -23,8 +23,10 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.ResourceUtils;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -116,71 +118,218 @@ public class HanlpHelper {
         String hanlpPropertiesPath = getHanlpPropertiesPath();
 
         HanLP.Config.CustomDictionaryPath = Arrays.stream(HanLP.Config.CustomDictionaryPath)
-                .map(path -> hanlpPropertiesPath + FILE_SPILT + path).toArray(String[]::new);
+                .map(path -> prependPathIfRelative(hanlpPropertiesPath, path))
+                .toArray(String[]::new);
         log.info("hanlpPropertiesPath:{},CustomDictionaryPath:{}", hanlpPropertiesPath,
                 HanLP.Config.CustomDictionaryPath);
 
-        HanLP.Config.CoreDictionaryPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.CoreDictionaryPath;
-        HanLP.Config.CoreDictionaryTransformMatrixDictionaryPath = hanlpPropertiesPath + FILE_SPILT
-                + HanLP.Config.CoreDictionaryTransformMatrixDictionaryPath;
-        HanLP.Config.BiGramDictionaryPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.BiGramDictionaryPath;
-        HanLP.Config.CoreStopWordDictionaryPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.CoreStopWordDictionaryPath;
+        log.info("Original CoreDictionaryPath before override: {}",
+                HanLP.Config.CoreDictionaryPath);
+
+        // 直接设置所有词典路径为绝对路径，避免路径拼接问题
+        String basePath =
+                hanlpPropertiesPath != null ? hanlpPropertiesPath : "E:/trae/supersonic/data";
+        HanLP.Config.CoreDictionaryPath = basePath + "/dictionary/CoreNatureDictionary.mini.txt";
+        HanLP.Config.CoreDictionaryTransformMatrixDictionaryPath =
+                basePath + "/dictionary/CoreNatureDictionary.transform.matrix.bin";
+        // 禁用BiGramDictionary（可选词典，如果不存在会导致启动失败）
+        HanLP.Config.BiGramDictionaryPath = "";
+        HanLP.Config.CoreStopWordDictionaryPath = basePath + "/dictionary/stopwords.txt";
         HanLP.Config.CoreSynonymDictionaryDictionaryPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.CoreSynonymDictionaryDictionaryPath;
+                basePath + "/dictionary/synonym/SynonymDictionary.txt";
+        HanLP.Config.PersonDictionaryPath = basePath + "/dictionary/person/names.txt";
+        HanLP.Config.PersonDictionaryTrPath = basePath + "/dictionary/person/names_tr.txt";
+        HanLP.Config.TranslatedPersonDictionaryPath =
+                basePath + "/dictionary/translate/TranslatedPerson.txt";
+        HanLP.Config.JapanesePersonDictionaryPath =
+                basePath + "/dictionary/japan/japanese_names.drc";
+        HanLP.Config.PlaceDictionaryPath = basePath + "/dictionary/place/place.txt";
+        HanLP.Config.PlaceDictionaryTrPath = basePath + "/dictionary/place/place_tr.txt";
+        HanLP.Config.OrganizationDictionaryPath =
+                basePath + "/dictionary/organization/organization_names.txt";
+        HanLP.Config.OrganizationDictionaryTrPath =
+                basePath + "/dictionary/organization/organization_names_tr.txt";
+        HanLP.Config.CharTypePath = basePath + "/dictionary/other/CharType.bin";
+        HanLP.Config.CharTablePath = basePath + "/dictionary/other/CharTable.bin";
+        HanLP.Config.PartOfSpeechTagDictionary =
+                basePath + "/dictionary/core/PartOfSpeechTagging.txt";
+        HanLP.Config.WordNatureModelPath = basePath + "/model/pos/CRFModel.txt";
+        HanLP.Config.MaxEntModelPath = basePath + "/model/ner/ner.maxent";
+        HanLP.Config.NNParserModelPath = basePath + "/model/dependency_parser/nn_parser_model.txt";
+        HanLP.Config.PerceptronParserModelPath =
+                basePath + "/model/dependency_parser/parser_model.bin";
+        HanLP.Config.CRFSegmentModelPath = basePath + "/model/segment/CRFSegmentModel.txt";
+        HanLP.Config.HMMSegmentModelPath = basePath + "/model/segment/HMMSegmentModel.bin";
+        HanLP.Config.CRFPOSModelPath = basePath + "/model/pos/CRFPOSModel.txt";
+        HanLP.Config.CRFNERModelPath = basePath + "/model/ner/CRFNERModel.txt";
+        HanLP.Config.PerceptronCWSModelPath = basePath + "/model/segment/PerceptronCWSModel.txt";
+        HanLP.Config.PerceptronPOSModelPath = basePath + "/model/pos/PerceptronPOSModel.txt";
+        HanLP.Config.PerceptronNERModelPath = basePath + "/model/ner/PerceptronNERModel.txt";
+
+        log.info("Setting CoreDictionaryPath to: {}", HanLP.Config.CoreDictionaryPath);
+        HanLP.Config.CoreDictionaryTransformMatrixDictionaryPath = prependPathIfRelative(
+                hanlpPropertiesPath, HanLP.Config.CoreDictionaryTransformMatrixDictionaryPath);
+        if (HanLP.Config.BiGramDictionaryPath != null
+                && !HanLP.Config.BiGramDictionaryPath.isEmpty()) {
+            String originalPath = HanLP.Config.BiGramDictionaryPath;
+            HanLP.Config.BiGramDictionaryPath =
+                    prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.BiGramDictionaryPath);
+            log.info("BiGramDictionaryPath updated: {} -> {}", originalPath,
+                    HanLP.Config.BiGramDictionaryPath);
+            // 验证文件是否存在
+            File bigramFile = new File(HanLP.Config.BiGramDictionaryPath);
+            log.info("BiGramDictionary file exists: {}, canRead: {}", bigramFile.exists(),
+                    bigramFile.canRead());
+        }
+        HanLP.Config.CoreStopWordDictionaryPath =
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.CoreStopWordDictionaryPath);
+        HanLP.Config.CoreSynonymDictionaryDictionaryPath = prependPathIfRelative(
+                hanlpPropertiesPath, HanLP.Config.CoreSynonymDictionaryDictionaryPath);
         HanLP.Config.PersonDictionaryPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.PersonDictionaryPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.PersonDictionaryPath);
         HanLP.Config.PersonDictionaryTrPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.PersonDictionaryTrPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.PersonDictionaryTrPath);
 
         HanLP.Config.PinyinDictionaryPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.PinyinDictionaryPath;
-        HanLP.Config.TranslatedPersonDictionaryPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.TranslatedPersonDictionaryPath;
-        HanLP.Config.JapanesePersonDictionaryPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.JapanesePersonDictionaryPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.PinyinDictionaryPath);
+        HanLP.Config.TranslatedPersonDictionaryPath = prependPathIfRelative(hanlpPropertiesPath,
+                HanLP.Config.TranslatedPersonDictionaryPath);
+        HanLP.Config.JapanesePersonDictionaryPath = prependPathIfRelative(hanlpPropertiesPath,
+                HanLP.Config.JapanesePersonDictionaryPath);
         HanLP.Config.PlaceDictionaryPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.PlaceDictionaryPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.PlaceDictionaryPath);
         HanLP.Config.PlaceDictionaryTrPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.PlaceDictionaryTrPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.PlaceDictionaryTrPath);
         HanLP.Config.OrganizationDictionaryPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.OrganizationDictionaryPath;
-        HanLP.Config.OrganizationDictionaryTrPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.OrganizationDictionaryTrPath;
-        HanLP.Config.CharTypePath = hanlpPropertiesPath + FILE_SPILT + HanLP.Config.CharTypePath;
-        HanLP.Config.CharTablePath = hanlpPropertiesPath + FILE_SPILT + HanLP.Config.CharTablePath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.OrganizationDictionaryPath);
+        HanLP.Config.OrganizationDictionaryTrPath = prependPathIfRelative(hanlpPropertiesPath,
+                HanLP.Config.OrganizationDictionaryTrPath);
+        HanLP.Config.CharTypePath =
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.CharTypePath);
+        HanLP.Config.CharTablePath =
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.CharTablePath);
         HanLP.Config.PartOfSpeechTagDictionary =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.PartOfSpeechTagDictionary;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.PartOfSpeechTagDictionary);
         HanLP.Config.WordNatureModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.WordNatureModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.WordNatureModelPath);
         HanLP.Config.MaxEntModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.MaxEntModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.MaxEntModelPath);
         HanLP.Config.NNParserModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.NNParserModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.NNParserModelPath);
         HanLP.Config.PerceptronParserModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.PerceptronParserModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.PerceptronParserModelPath);
         HanLP.Config.CRFSegmentModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.CRFSegmentModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.CRFSegmentModelPath);
         HanLP.Config.HMMSegmentModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.HMMSegmentModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.HMMSegmentModelPath);
         HanLP.Config.CRFCWSModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.CRFCWSModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.CRFCWSModelPath);
         HanLP.Config.CRFPOSModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.CRFPOSModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.CRFPOSModelPath);
         HanLP.Config.CRFNERModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.CRFNERModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.CRFNERModelPath);
         HanLP.Config.PerceptronCWSModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.PerceptronCWSModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.PerceptronCWSModelPath);
         HanLP.Config.PerceptronPOSModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.PerceptronPOSModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.PerceptronPOSModelPath);
         HanLP.Config.PerceptronNERModelPath =
-                hanlpPropertiesPath + FILE_SPILT + HanLP.Config.PerceptronNERModelPath;
+                prependPathIfRelative(hanlpPropertiesPath, HanLP.Config.PerceptronNERModelPath);
+
+        // 强制初始化HanLP，确保配置生效
+        try {
+            log.info("Forcing HanLP initialization with corrected paths...");
+            // 执行一个简单的分词来触发HanLP初始化
+            Segment segment = HanLP.newSegment();
+            segment.seg("测试");
+            log.info("HanLP initialization successful!");
+        } catch (Exception e) {
+            log.error("HanLP initialization failed after reset! Path: {}",
+                    HanLP.Config.CoreDictionaryPath, e);
+        }
+    }
+
+    private static String prependPathIfRelative(String basePath, String relativePath) {
+        if (relativePath == null) {
+            return null;
+        }
+        File file = new File(relativePath);
+        if (file.isAbsolute()) {
+            return relativePath;
+        }
+        return basePath + FILE_SPILT + relativePath;
     }
 
     public static String getHanlpPropertiesPath() throws FileNotFoundException {
-        return ResourceUtils.getFile("classpath:hanlp.properties").getParent();
+        // 首先尝试加载外部配置文件
+        String defaultPath = "E:/trae/supersonic/data";
+        String externalPropertiesPath = defaultPath + "/hanlp.properties";
+
+        File externalFile = new File(externalPropertiesPath);
+        if (externalFile.exists()) {
+            // 检查配置是否为空或只有注释
+            try (BufferedReader reader = new BufferedReader(new FileReader(externalFile))) {
+                String line;
+                boolean hasConfig = false;
+                while ((line = reader.readLine()) != null) {
+                    line = line.trim();
+                    if (!line.isEmpty() && !line.startsWith("#")) {
+                        hasConfig = true;
+                        break;
+                    }
+                }
+                if (hasConfig) {
+                    log.info("Loading hanlp.properties from external path: {}",
+                            externalPropertiesPath);
+                    String configRoot = loadRootFromProperties(externalFile);
+                    if (configRoot != null) {
+                        log.info("Using root from hanlp.properties: {}", configRoot);
+                        return configRoot;
+                    }
+                } else {
+                    log.info(
+                            "External hanlp.properties is empty or only contains comments, using jar internal dictionaries");
+                }
+            } catch (IOException e) {
+                log.warn("Failed to read hanlp.properties: {}", e.getMessage());
+            }
+        }
+
+        // 如果外部配置为空或不存在，返回null，让HanLP使用jar内部的默认词典
+        log.info("Using HanLP jar internal dictionaries");
+        return null;
+    }
+
+    private static String loadRootFromProperties(File propertiesFile) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(propertiesFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                // Skip comments and empty lines
+                if (line.isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+                // Check for CoreDictionaryPath - if it's already an absolute path, return it
+                // directly
+                if (line.startsWith("CoreDictionaryPath=")) {
+                    String value = line.substring("CoreDictionaryPath=".length()).trim();
+                    if (value.matches("^[A-Za-z]:.*") || value.startsWith("/")) {
+                        // It's already an absolute path (Windows: C:\..., Linux/Mac: /...)
+                        log.info("Found absolute CoreDictionaryPath in hanlp.properties: {}",
+                                value);
+                        return value;
+                    }
+                }
+                // Check for root configuration
+                if (line.startsWith("root=")) {
+                    String root = line.substring(5).trim();
+                    log.info("Found root configuration in hanlp.properties: {}", root);
+                    return root;
+                }
+            }
+        } catch (IOException e) {
+            log.warn("Failed to read root from hanlp.properties: {}", e.getMessage());
+        }
+        return null;
     }
 
     public static boolean addToCustomDictionary(DictWord dictWord) {
