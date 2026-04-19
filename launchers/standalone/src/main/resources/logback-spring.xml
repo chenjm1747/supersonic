@@ -100,7 +100,7 @@
         </rollingPolicy>
         <encoder>
             <charset>UTF-8</charset>
-            <pattern>%d [%thread] %-5level [%X{traceId}] %logger{36} %line - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{36} %line - %msg%n</pattern>
         </encoder>
         <filter class="ch.qos.logback.classic.filter.LevelFilter">
             <!-- 过滤的级别 -->
@@ -110,6 +110,14 @@
     <!--keyPipeline相关日志-->
     <logger name="keyPipeline" level="info" additivity="false">
         <appender-ref ref="keyPipelineAppender"/>
+    </logger>
+
+    <!--langchain4j 请求/响应日志-->
+    <logger name="dev.langchain4j" level="DEBUG" additivity="false">
+        <appender-ref ref="fileInfoLog"/>
+    </logger>
+    <logger name="dev.ai4j.openai4j" level="DEBUG" additivity="false">
+        <appender-ref ref="fileInfoLog"/>
     </logger>
 
     <root level="INFO">

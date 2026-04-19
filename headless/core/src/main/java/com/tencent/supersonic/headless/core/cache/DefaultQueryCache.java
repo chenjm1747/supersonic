@@ -2,8 +2,9 @@ package com.tencent.supersonic.headless.core.cache;
 
 import com.tencent.supersonic.common.util.ContextUtils;
 import com.tencent.supersonic.headless.api.pojo.request.SemanticQueryReq;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -12,8 +13,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Component
-@Slf4j
 public class DefaultQueryCache implements QueryCache {
+    private static final Logger log = LoggerFactory.getLogger(DefaultQueryCache.class);
 
     public Object query(SemanticQueryReq semanticQueryReq, String cacheKey) {
         CacheManager cacheManager = ContextUtils.getBean(CacheManager.class);
@@ -32,7 +33,7 @@ public class DefaultQueryCache implements QueryCache {
         CacheManager cacheManager = ContextUtils.getBean(CacheManager.class);
         CacheCommonConfig cacheCommonConfig = ContextUtils.getBean(CacheCommonConfig.class);
         if (cacheCommonConfig.getCacheEnable() && Objects.nonNull(value)) {
-            CompletableFuture.supplyAsync(() -> cacheManager.put(cacheKey, value))
+            CompletableFuture.runAsync(() -> cacheManager.put(cacheKey, value))
                     .exceptionally(exception -> {
                         log.warn("exception:", exception);
                         return null;
@@ -50,19 +51,18 @@ public class DefaultQueryCache implements QueryCache {
         return cacheManager.generateCacheKey(keyByModelIds, commandMd5);
     }
 
-    private String getKeyByModelIds(List<Long> modelIds) {
-        return String.join(",",
-                modelIds.stream().map(Object::toString).collect(Collectors.toList()));
-    }
-
-    private boolean isCache(SemanticQueryReq semanticQueryReq) {
-        CacheCommonConfig cacheCommonConfig = ContextUtils.getBean(CacheCommonConfig.class);
-        if (!cacheCommonConfig.getCacheEnable()) {
+    public boolean isCache(SemanticQueryReq semanticQueryReq) {
+        if (semanticQueryReq == null) {
             return false;
         }
-        if (semanticQueryReq.getCacheInfo() != null) {
-            return semanticQueryReq.getCacheInfo().getCache();
+        CacheCommonConfig cacheCommonConfig = ContextUtils.getBean(CacheCommonConfig.class);
+        return cacheCommonConfig.getCacheEnable();
+    }
+
+    public String getKeyByModelIds(List<Long> modelIds) {
+        if (modelIds == null || modelIds.isEmpty()) {
+            return "";
         }
-        return false;
+        return modelIds.stream().sorted().map(String::valueOf).collect(Collectors.joining(","));
     }
 }

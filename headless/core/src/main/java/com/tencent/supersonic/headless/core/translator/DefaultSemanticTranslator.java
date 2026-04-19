@@ -10,9 +10,10 @@ import com.tencent.supersonic.headless.core.pojo.SqlQuery;
 import com.tencent.supersonic.headless.core.translator.optimizer.QueryOptimizer;
 import com.tencent.supersonic.headless.core.translator.parser.QueryParser;
 import com.tencent.supersonic.headless.core.utils.ComponentFactory;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -21,8 +22,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Component
-@Slf4j
 public class DefaultSemanticTranslator implements SemanticTranslator {
+    private static final Logger log = LoggerFactory.getLogger(DefaultSemanticTranslator.class);
 
     public void translate(QueryStatement queryStatement) throws Exception {
         if (queryStatement.isTranslated()) {

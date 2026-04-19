@@ -7,8 +7,9 @@ import com.tencent.supersonic.headless.api.pojo.response.SemanticSchemaResp;
 import com.tencent.supersonic.headless.core.pojo.OntologyQuery;
 import com.tencent.supersonic.headless.core.pojo.QueryStatement;
 import com.tencent.supersonic.headless.core.pojo.SqlQuery;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
@@ -17,12 +18,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * This parser replaces dimension bizName in the S2SQL with calculation expression (if configured).
- */
 @Component("DimExpressionParser")
-@Slf4j
 public class DimExpressionParser implements QueryParser {
+    private static final Logger log = LoggerFactory.getLogger(DimExpressionParser.class);
+
     @Override
     public boolean accept(QueryStatement queryStatement) {
         return Objects.nonNull(queryStatement.getSqlQuery())
@@ -64,5 +63,4 @@ public class DimExpressionParser implements QueryParser {
 
         return dim2Expr;
     }
-
 }

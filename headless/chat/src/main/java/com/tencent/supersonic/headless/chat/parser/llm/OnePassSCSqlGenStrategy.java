@@ -9,6 +9,7 @@ import com.tencent.supersonic.common.util.ChatAppManager;
 import com.tencent.supersonic.headless.chat.parser.ParserConfig;
 import com.tencent.supersonic.headless.chat.query.llm.s2sql.LLMReq;
 import com.tencent.supersonic.headless.chat.query.llm.s2sql.LLMResp;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.input.Prompt;
 import dev.langchain4j.model.input.PromptTemplate;
@@ -53,6 +54,7 @@ public class OnePassSCSqlGenStrategy extends SqlGenStrategy {
                     + "\n5.ALWAYS use `with` statement if nested aggregation is needed."
                     + "\n6.ALWAYS enclose alias declared by `AS` command in underscores."
                     + "\n7.Alias created by `AS` command must be in the same language ast the `Question`."
+                    + "\n8.Output format: You MUST output a valid JSON object with exactly two fields: `thought` (a brief explanation) and `sql` (the SQL query). Example: {\"thought\":\"brief explanation\",\"sql\":\"SELECT ...\"}"
                     + "\n#Exemplars: {{exemplar}}"
                     + "\n#Query: Question:{{question}},Schema:{{schema}},SideInfo:{{information}}";
 
@@ -91,8 +93,6 @@ public class OnePassSCSqlGenStrategy extends SqlGenStrategy {
                     .setJsonFormatType(parserConfig.getParameterValue(PARSER_FORMAT_JSON_TYPE));
         }
         ChatLanguageModel chatLanguageModel = getChatLanguageModel(chatModelConfig);
-        SemanticSqlExtractor extractor =
-                AiServices.create(SemanticSqlExtractor.class, chatLanguageModel);
 
         Map<Prompt, List<Text2SQLExemplar>> prompt2Exemplar = new HashMap<>();
         for (List<Text2SQLExemplar> exemplars : exemplarsList) {
@@ -104,7 +104,7 @@ public class OnePassSCSqlGenStrategy extends SqlGenStrategy {
         // 3.perform multiple self-consistency inferences parallelly
         Map<String, Prompt> output2Prompt = new ConcurrentHashMap<>();
         prompt2Exemplar.keySet().parallelStream().forEach(prompt -> {
-            SemanticSql s2Sql = extractor.generateSemanticSql(prompt.toUserMessage().singleText());
+            SemanticSql s2Sql = generateSemanticSqlWithRetry(chatLanguageModel, prompt);
             output2Prompt.put(s2Sql.getSql(), prompt);
             keyPipelineLog.info("OnePassSCSqlGenStrategy modelReq:\n{} \nmodelResp:\n{}",
                     prompt.text(), s2Sql);
@@ -121,6 +121,40 @@ public class OnePassSCSqlGenStrategy extends SqlGenStrategy {
         return llmResp;
     }
 
+    private SemanticSql generateSemanticSqlWithRetry(ChatLanguageModel chatLanguageModel,
+            Prompt prompt) {
+        SemanticSqlExtractor extractor =
+                AiServices.create(SemanticSqlExtractor.class, chatLanguageModel);
+        String rawResponse = chatLanguageModel.generate(prompt.toUserMessage().singleText());
+        String cleanedResponse = cleanJsonResponse(rawResponse);
+        try {
+            return extractor.generateSemanticSql(cleanedResponse);
+        } catch (Exception e) {
+            log.warn("Failed to parse semantic SQL, trying with raw response", e);
+            return extractor.generateSemanticSql(rawResponse);
+        }
+    }
+
+    private String cleanJsonResponse(String response) {
+        if (StringUtils.isBlank(response)) {
+            return response;
+        }
+        String cleaned = response.trim();
+        if (cleaned.startsWith("```")) {
+            cleaned = cleaned.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "");
+        }
+        int thinkEndIndex = cleaned.lastIndexOf("</think>");
+        if (thinkEndIndex >= 0 && thinkEndIndex < cleaned.length() - 6) {
+            cleaned = cleaned.substring(thinkEndIndex + 7).trim();
+        }
+        int jsonStart = cleaned.indexOf('{');
+        int jsonEnd = cleaned.lastIndexOf('}');
+        if (jsonStart >= 0 && jsonEnd > jsonStart) {
+            cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+        }
+        return cleaned;
+    }
+
     private Prompt generatePrompt(LLMReq llmReq, LLMResp llmResp, ChatApp chatApp) {
         StringBuilder exemplars = new StringBuilder();
         for (Text2SQLExemplar exemplar : llmReq.getDynamicExemplars()) {
@@ -130,7 +164,18 @@ public class OnePassSCSqlGenStrategy extends SqlGenStrategy {
             exemplars.append(exemplarStr);
         }
         String dataSemantics = promptHelper.buildSchemaStr(llmReq);
-        String sideInformation = promptHelper.buildSideInformation(llmReq);
+
+        // Use context-aware side information if conversation history exists
+        String sideInformation;
+        if (llmReq.getContextHistory() != null && !llmReq.getContextHistory().isEmpty()) {
+            sideInformation = promptHelper.buildSideInformationWithContext(llmReq);
+        } else if (llmReq.getParsedQuestion() != null || llmReq.getIntentResult() != null) {
+            // Use enhanced side info with parsed question and intent
+            sideInformation = promptHelper.buildEnhancedSideInfo(llmReq);
+        } else {
+            sideInformation = promptHelper.buildSideInformation(llmReq);
+        }
+
         llmResp.setSchema(dataSemantics);
         llmResp.setSideInfo(sideInformation);
 

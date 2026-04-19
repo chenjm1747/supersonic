@@ -3,8 +3,12 @@ package com.tencent.supersonic.chat.server.pojo;
 import com.tencent.supersonic.chat.api.pojo.request.ChatParseReq;
 import com.tencent.supersonic.chat.api.pojo.response.ChatParseResp;
 import com.tencent.supersonic.chat.server.agent.Agent;
+import com.tencent.supersonic.headless.core.wiki.dto.WikiEntity;
+import com.tencent.supersonic.headless.core.wiki.dto.WikiKnowledgeCard;
 import lombok.Data;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 @Data
@@ -12,6 +16,8 @@ public class ParseContext {
     private ChatParseReq request;
     private ChatParseResp response;
     private Agent agent;
+    private List<WikiEntity> wikiEntities = new ArrayList<>();
+    private List<WikiKnowledgeCard> wikiKnowledgeCards = new ArrayList<>();
 
     public ParseContext(ChatParseReq request, ChatParseResp response) {
         this.request = request;

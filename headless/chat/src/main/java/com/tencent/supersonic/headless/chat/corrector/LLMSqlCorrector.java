@@ -74,6 +74,9 @@ public class LLMSqlCorrector extends BaseSemanticCorrector {
                 AiServices.create(SemanticSqlExtractor.class, chatLanguageModel);
         Prompt prompt = generatePrompt(chatQueryContext.getRequest().getQueryText(),
                 semanticParseInfo, chatApp.getPrompt(), exemplar);
+        if (Objects.isNull(prompt)) {
+            return;
+        }
         SemanticSql s2Sql = extractor.generateSemanticSql(prompt.toUserMessage().singleText());
         keyPipelineLog.info("LLMSqlCorrector modelReq:\n{} \nmodelResp:\n{}", prompt.text(), s2Sql);
         if ("NEGATIVE".equalsIgnoreCase(s2Sql.getOpinion())
@@ -84,6 +87,10 @@ public class LLMSqlCorrector extends BaseSemanticCorrector {
 
     private Prompt generatePrompt(String queryText, SemanticParseInfo semanticParseInfo,
             String promptTemplate, Text2SQLExemplar exemplar) {
+        if (Objects.isNull(exemplar)) {
+            log.warn("exemplar is null, skip prompt generation");
+            return null;
+        }
         Map<String, Object> variable = new HashMap<>();
         variable.put("question", queryText);
         variable.put("sql", semanticParseInfo.getSqlInfo().getCorrectedS2SQL());

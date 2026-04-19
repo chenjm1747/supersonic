@@ -15,7 +15,6 @@ import com.tencent.supersonic.headless.core.pojo.Ontology;
 import com.tencent.supersonic.headless.core.pojo.OntologyQuery;
 import com.tencent.supersonic.headless.core.pojo.QueryStatement;
 import com.tencent.supersonic.headless.core.translator.parser.Constants;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
@@ -30,12 +29,14 @@ import org.jgrapht.GraphPath;
 import org.jgrapht.alg.shortestpath.DijkstraShortestPath;
 import org.jgrapht.graph.DefaultEdge;
 import org.jgrapht.graph.DefaultUndirectedGraph;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-@Slf4j
 public class SqlBuilder {
+    private static final Logger log = LoggerFactory.getLogger(SqlBuilder.class);
 
     private final S2CalciteSchema schema;
     private final SqlValidatorScope scope;
@@ -72,8 +73,6 @@ public class SqlBuilder {
         try {
             parserNode = optimizeParseNode(parserNode, engineType);
         } catch (Exception e) {
-            // failure in optimization phase doesn't affect the query result,
-            // just ignore it
             log.error("optimizeParseNode error", e);
         }
         return SemanticNode.getSql(parserNode, engineType);
@@ -241,7 +240,6 @@ public class SqlBuilder {
                                     r.getMiddle(), tableView.getAlias() + "." + r.getRight()))
                             .collect(Collectors.toList()));
                     matchJoinRelation.setJoinType(joinRelation.getJoinType());
-                    // Added join condition judgment to solve the problem of join condition order
                 } else if (joinRelation.getLeft()
                         .equalsIgnoreCase(tableView.getDataModel().getName())
                         && before.containsKey(joinRelation.getRight())) {
@@ -251,8 +249,6 @@ public class SqlBuilder {
                                     before.get(joinRelation.getRight()) + "." + r.getRight(),
                                     r.getMiddle(), tableView.getAlias() + "." + r.getLeft()))
                             .collect(Collectors.toList());
-                    // added by jerryjzhang on 20250214
-                    // use the one with the most conditions to join left and right tables
                     if (matchJoinRelation.getJoinCondition() == null || candidateJoinCon
                             .size() > matchJoinRelation.getJoinCondition().size()) {
                         matchJoinRelation.setJoinCondition(candidateJoinCon);

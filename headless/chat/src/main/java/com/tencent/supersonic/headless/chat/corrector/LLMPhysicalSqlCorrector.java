@@ -77,6 +77,9 @@ public class LLMPhysicalSqlCorrector extends BaseSemanticCorrector {
                 AiServices.create(PhysicalSqlExtractor.class, chatLanguageModel);
         Prompt prompt = generatePrompt(chatQueryContext.getRequest().getQueryText(),
                 semanticParseInfo, chatApp.getPrompt());
+        if (Objects.isNull(prompt)) {
+            return;
+        }
         PhysicalSql physicalSql =
                 extractor.generatePhysicalSql(prompt.toUserMessage().singleText());
         keyPipelineLog.info("LLMPhysicalSqlCorrector modelReq:\n{} \nmodelResp:\n{}", prompt.text(),
@@ -89,9 +92,14 @@ public class LLMPhysicalSqlCorrector extends BaseSemanticCorrector {
 
     private Prompt generatePrompt(String queryText, SemanticParseInfo semanticParseInfo,
             String promptTemplate) {
+        String querySql = semanticParseInfo.getSqlInfo().getQuerySQL();
+        if (StringUtils.isBlank(querySql)) {
+            log.warn("querySQL is null or blank, skip physical SQL correction");
+            return null;
+        }
         Map<String, Object> variable = new HashMap<>();
         variable.put("question", queryText);
-        variable.put("sql", semanticParseInfo.getSqlInfo().getQuerySQL());
+        variable.put("sql", querySql);
 
         return PromptTemplate.from(promptTemplate).apply(variable);
     }

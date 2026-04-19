@@ -5,7 +5,6 @@ import com.tencent.supersonic.common.calcite.SemanticSqlDialect;
 import com.tencent.supersonic.common.calcite.SqlDialectFactory;
 import com.tencent.supersonic.common.pojo.enums.EngineType;
 import com.tencent.supersonic.headless.core.translator.parser.Constants;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.hep.HepPlanner;
 import org.apache.calcite.plan.hep.HepProgramBuilder;
@@ -36,6 +35,8 @@ import org.apache.calcite.sql2rel.SqlToRelConverter;
 import org.apache.calcite.util.Litmus;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,9 +50,8 @@ import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-/** model item node */
-@Slf4j
 public abstract class SemanticNode {
+    private static final Logger log = LoggerFactory.getLogger(SemanticNode.class);
 
     public static Set<SqlKind> AGGREGATION_KIND = new HashSet<>();
     public static Set<String> AGGREGATION_FUNC = new HashSet<>();
@@ -64,7 +64,7 @@ public abstract class SemanticNode {
         AGGREGATION_KIND.add(SqlKind.SUM);
         AGGREGATION_KIND.add(SqlKind.MAX);
         AGGREGATION_KIND.add(SqlKind.MIN);
-        AGGREGATION_KIND.add(SqlKind.OTHER_FUNCTION); // more
+        AGGREGATION_KIND.add(SqlKind.OTHER_FUNCTION);
         AGGREGATION_FUNC.add("sum");
         AGGREGATION_FUNC.add("count");
         AGGREGATION_FUNC.add("max");
@@ -255,7 +255,6 @@ public abstract class SemanticNode {
             fieldVisit(where.operand(0), parseInfo, "");
             return;
         }
-        // 子查询
         if (where.operandCount() == 2 && (where.operand(0).getKind().equals(SqlKind.IDENTIFIER)
                 && (where.operand(1).getKind().equals(SqlKind.SELECT)
                         || where.operand(1).getKind().equals(SqlKind.ORDER_BY)))) {
@@ -284,8 +283,6 @@ public abstract class SemanticNode {
             return;
         }
         SqlKind kind = field.getKind();
-        // System.out.println(kind);
-        // aggfunction
         if (AGGREGATION_KIND.contains(kind)) {
             SqlOperator sqlCall = ((SqlCall) field).getOperator();
             if (AGGREGATION_FUNC.contains(sqlCall.toString().toLowerCase())) {
@@ -466,7 +463,7 @@ public abstract class SemanticNode {
         return SqlLiteral.createSymbol(JoinType.INNER, SqlParserPos.ZERO);
     }
 
-    public static List<SqlNode> deduplicateNode(List<SqlNode> listNode) { // List<SqlNode>去重
+    public static List<SqlNode> deduplicateNode(List<SqlNode> listNode) {
         if (listNode == null) {
             return null;
         }
@@ -479,7 +476,7 @@ public abstract class SemanticNode {
         return uniqueElements;
     }
 
-    private static boolean containsElement(List<SqlNode> list, SqlNode element) { // 检查List<SqlNode>中是否含有某element
+    private static boolean containsElement(List<SqlNode> list, SqlNode element) {
         for (SqlNode i : list) {
             if (i.equalsDeep(element, Litmus.IGNORE)) {
                 return true;

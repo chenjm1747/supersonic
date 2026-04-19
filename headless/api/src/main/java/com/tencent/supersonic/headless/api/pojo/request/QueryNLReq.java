@@ -33,6 +33,10 @@ public class QueryNLReq extends SemanticQueryReq implements Serializable {
     private SemanticParseInfo selectedParseInfo;
     private boolean descriptionMapped;
 
+    // Multi-turn conversation support
+    private String conversationId;
+    private Integer contextRound;
+
     @Override
     public String toCustomizedString() {
         StringBuilder stringBuilder = new StringBuilder("{");

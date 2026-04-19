@@ -153,7 +153,8 @@ public class ChatQueryRepositoryImpl implements ChatQueryRepository {
         try {
             chatQueryDOMapper.insert(chatQueryDO);
         } catch (Exception e) {
-            log.info("database insert has an exception:{}", e.toString());
+            log.error("Failed to create chat query, insert exception:{}", e.toString());
+            throw new RuntimeException("Failed to create chat query", e);
         }
         return chatQueryDO.getQuestionId();
     }

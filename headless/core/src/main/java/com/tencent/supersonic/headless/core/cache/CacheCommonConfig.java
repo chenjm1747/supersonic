@@ -1,11 +1,9 @@
 package com.tencent.supersonic.headless.core.cache;
 
-import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@Data
 public class CacheCommonConfig {
 
     @Value("${s2.cache.common.app:supersonic}")
@@ -22,4 +20,24 @@ public class CacheCommonConfig {
 
     @Value("${s2.query.cache.enable:true}")
     private Boolean cacheEnable;
+
+    public String getCacheCommonApp() {
+        return cacheCommonApp;
+    }
+
+    public String getCacheCommonEnv() {
+        return cacheCommonEnv;
+    }
+
+    public Integer getCacheCommonVersion() {
+        return cacheCommonVersion;
+    }
+
+    public Integer getCacheCommonExpireAfterWrite() {
+        return cacheCommonExpireAfterWrite;
+    }
+
+    public Boolean getCacheEnable() {
+        return cacheEnable;
+    }
 }

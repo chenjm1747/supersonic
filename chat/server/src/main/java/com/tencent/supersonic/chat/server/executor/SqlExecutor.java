@@ -18,12 +18,18 @@ import com.tencent.supersonic.headless.api.pojo.response.SemanticQueryResp;
 import com.tencent.supersonic.headless.chat.query.llm.s2sql.LLMSqlQuery;
 import com.tencent.supersonic.headless.server.facade.service.SemanticLayerService;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Date;
 import java.util.Objects;
 
+@Slf4j
 public class SqlExecutor implements ChatQueryExecutor {
+
+    private static final Logger keyPipelineLog = LoggerFactory.getLogger("keyPipeline");
 
     @Override
     public boolean accept(ExecuteContext executeContext) {
@@ -33,9 +39,21 @@ public class SqlExecutor implements ChatQueryExecutor {
     @SneakyThrows
     @Override
     public QueryResult execute(ExecuteContext executeContext) {
+        keyPipelineLog.info("[Execute] SqlExecutor开始 | queryId:{} | parseId:{}",
+                executeContext.getRequest().getQueryId(),
+                executeContext.getParseInfo() != null ? executeContext.getParseInfo().getId()
+                        : "null");
+
         QueryResult queryResult = doExecute(executeContext);
 
         if (queryResult != null) {
+            keyPipelineLog.info(
+                    "[Execute] SQL执行完成 | queryId:{} | queryState:{} | resultCount:{} | sql:{}",
+                    queryResult.getQueryId(), queryResult.getQueryState(),
+                    queryResult.getQueryResults() != null ? queryResult.getQueryResults().size()
+                            : 0,
+                    queryResult.getQuerySql());
+
             String textResult = ResultFormatter.transform2TextNew(queryResult.getQueryColumns(),
                     queryResult.getQueryResults());
             queryResult.setTextResult(textResult);
@@ -57,6 +75,9 @@ public class SqlExecutor implements ChatQueryExecutor {
                         .updatedBy(executeContext.getRequest().getUser().getName())
                         .createdAt(new Date()).build());
             }
+        } else {
+            keyPipelineLog.error("[Execute] SQL执行返回null | queryId:{}",
+                    executeContext.getRequest().getQueryId());
         }
 
         return queryResult;
@@ -64,6 +85,9 @@ public class SqlExecutor implements ChatQueryExecutor {
 
     @SneakyThrows
     private QueryResult doExecute(ExecuteContext executeContext) {
+        keyPipelineLog.info("[Execute->SQL] 开始执行SQL查询 | queryId:{}",
+                executeContext.getRequest().getQueryId());
+
         SemanticLayerService semanticLayer = ContextUtils.getBean(SemanticLayerService.class);
         ChatContextService chatContextService = ContextUtils.getBean(ChatContextService.class);
 
@@ -72,6 +96,8 @@ public class SqlExecutor implements ChatQueryExecutor {
         SemanticParseInfo parseInfo = executeContext.getParseInfo();
         if (Objects.isNull(parseInfo.getSqlInfo())
                 || StringUtils.isBlank(parseInfo.getSqlInfo().getCorrectedS2SQL())) {
+            keyPipelineLog.error("[Execute->SQL] parseInfo或sql为空 | queryId:{}",
+                    executeContext.getRequest().getQueryId());
             return null;
         }
 
@@ -79,6 +105,8 @@ public class SqlExecutor implements ChatQueryExecutor {
         String finalSql = StringUtils.isNotBlank(parseInfo.getSqlInfo().getQuerySQL())
                 ? parseInfo.getSqlInfo().getQuerySQL()
                 : parseInfo.getSqlInfo().getCorrectedS2SQL();
+
+        keyPipelineLog.info("[Execute->SQL] 最终SQL | sql:{}", finalSql);
 
         QuerySqlReq sqlReq = QuerySqlReq.builder().sql(finalSql).build();
         sqlReq.setSqlInfo(parseInfo.getSqlInfo());
@@ -89,10 +117,17 @@ public class SqlExecutor implements ChatQueryExecutor {
         queryResult.setQueryId(executeContext.getRequest().getQueryId());
         queryResult.setChatContext(parseInfo);
         queryResult.setQueryMode(parseInfo.getQueryMode());
+
+        keyPipelineLog.info("[Execute->SQL] 调用SemanticLayerService.queryByReq");
         SemanticQueryResp queryResp =
                 semanticLayer.queryByReq(sqlReq, executeContext.getRequest().getUser());
         queryResult.setQueryTimeCost(System.currentTimeMillis() - startTime);
+
         if (queryResp != null) {
+            keyPipelineLog.info("[Execute->SQL] 查询成功 | queryId:{} | timeCost:{}ms | resultSize:{}",
+                    queryResult.getQueryId(), queryResult.getQueryTimeCost(),
+                    queryResp.getResultList() != null ? queryResp.getResultList().size() : 0);
+
             queryResult.setQueryAuthorization(queryResp.getQueryAuthorization());
             queryResult.setQuerySql(finalSql);
             queryResult.setQueryResults(queryResp.getResultList());
@@ -102,6 +137,7 @@ public class SqlExecutor implements ChatQueryExecutor {
             chatCtx.setParseInfo(parseInfo);
             chatContextService.updateContext(chatCtx);
         } else {
+            keyPipelineLog.error("[Execute->SQL] 查询返回null | queryId:{}", queryResult.getQueryId());
             queryResult.setQueryState(QueryState.INVALID);
         }
 

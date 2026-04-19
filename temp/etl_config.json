@@ -1,0 +1,28 @@
+{
+    "mysql": {
+        "host": "192.168.1.7",
+        "port": 3306,
+        "database": "charge_zbhx",
+        "user": "root",
+        "password": "your_mysql_password"
+    },
+    "postgresql": {
+        "host": "192.168.1.7",
+        "port": 54321,
+        "database": "postgres",
+        "schema": "heating_analytics",
+        "user": "postgres",
+        "password": "Huilian1234"
+    },
+    "sync_schedule": {
+        "full_sync": "0 2 * * *",
+        "incremental_sync": "0 * * * *",
+        "refresh_summary": "0 3 * * 0"
+    },
+    "sync_options": {
+        "batch_size": 10000,
+        "retry_times": 3,
+        "retry_interval": 60,
+        "log_retention_days": 30
+    }
+}

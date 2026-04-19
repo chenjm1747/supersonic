@@ -3,6 +3,7 @@ package com.tencent.supersonic.chat.server.parser;
 import com.google.common.collect.Lists;
 import com.tencent.supersonic.chat.api.pojo.response.ChatParseResp;
 import com.tencent.supersonic.chat.api.pojo.response.QueryResp;
+import com.tencent.supersonic.chat.server.parser.wiki.WikiPreProcessor;
 import com.tencent.supersonic.chat.server.pojo.ParseContext;
 import com.tencent.supersonic.chat.server.service.ChatManageService;
 import com.tencent.supersonic.chat.server.util.QueryReqConverter;
@@ -80,9 +81,21 @@ public class NL2SQLParser implements ChatQueryParser {
 
     @Override
     public void parse(ParseContext parseContext) {
+        keyPipelineLog.info("[Wiki知识库->Parse] NL2SQLParser开始 | queryText:{}",
+                parseContext.getRequest().getQueryText());
+
+        // Step 1: Wiki preprocessing to enrich context with Wiki knowledge
+        WikiPreProcessor wikiPreProcessor = ContextUtils.getBean(WikiPreProcessor.class);
+        wikiPreProcessor.preprocess(parseContext);
+        keyPipelineLog.info("[Wiki知识库->Parse] Wiki预处理完成 | wikiEntities:{} | wikiCards:{}",
+                parseContext.getWikiEntities().size(), parseContext.getWikiKnowledgeCards().size());
+
         // first go with rule-based parsers unless the user has already selected one parse.
         if (Objects.isNull(parseContext.getRequest().getSelectedParse())) {
             QueryNLReq queryNLReq = QueryReqConverter.buildQueryNLReq(parseContext);
+            keyPipelineLog.info("[Wiki知识库->Parse] QueryNLReq构建完成 | dataSetIds:{}",
+                    queryNLReq.getDataSetIds());
+
             queryNLReq.setText2SQLType(Text2SQLType.ONLY_RULE);
             if (parseContext.enableLLM()) {
                 queryNLReq.setText2SQLType(Text2SQLType.NONE);
@@ -96,15 +109,22 @@ public class NL2SQLParser implements ChatQueryParser {
             for (Long datasetId : requestedDatasets) {
                 queryNLReq.setDataSetIds(Collections.singleton(datasetId));
                 ChatParseResp parseResp = new ChatParseResp(parseContext.getRequest().getQueryId());
+                keyPipelineLog.info("[Wiki知识库->Parse] 开始解析数据集 | datasetId:{}", datasetId);
+
                 for (MapModeEnum mode : Lists.newArrayList(MapModeEnum.STRICT,
                         MapModeEnum.MODERATE)) {
                     queryNLReq.setMapModeEnum(mode);
                     doParse(queryNLReq, parseResp);
+                    keyPipelineLog.info(
+                            "[Wiki知识库->Parse] 解析模式:{} | parseRespState:{} | selectedParsesSize:{}",
+                            mode, parseResp.getState(), parseResp.getSelectedParses().size());
                 }
 
                 if (parseResp.getSelectedParses().isEmpty() && candidateParses.isEmpty()) {
                     queryNLReq.setMapModeEnum(MapModeEnum.LOOSE);
                     doParse(queryNLReq, parseResp);
+                    keyPipelineLog.info("[Wiki知识库->Parse] LOOSE模式重试 | selectedParsesSize:{}",
+                            parseResp.getSelectedParses().size());
                 }
 
                 if (parseResp.getSelectedParses().isEmpty()) {
@@ -121,17 +141,25 @@ public class NL2SQLParser implements ChatQueryParser {
             SemanticParseInfo.sort(candidateParses);
             parseContext.getResponse().setSelectedParses(
                     candidateParses.subList(0, Math.min(parserShowCount, candidateParses.size())));
+            keyPipelineLog.info("[Wiki知识库->Parse] 最终候选解析 | candidateParsesSize:{}",
+                    candidateParses.size());
+
             if (parseContext.getResponse().getSelectedParses().isEmpty()) {
                 parseContext.getResponse().setState(ParseResp.ParseState.FAILED);
                 parseContext.getResponse().setErrorMsg(errMsg.toString());
+                keyPipelineLog.error("[Wiki知识库->Parse] 解析失败 | errMsg:{}", errMsg.toString());
             }
         }
 
         // next go with llm-based parsers unless LLM is disabled or use feedback is needed.
         if (parseContext.needLLMParse() && !parseContext.needFeedback()) {
+            keyPipelineLog.info("[Wiki知识库->LLM Parse] 开始LLM解析 | needLLMParse:{}",
+                    parseContext.needLLMParse());
+
             // either the user or the system selects one parse from the candidate parses.
             if (Objects.isNull(parseContext.getRequest().getSelectedParse())
                     && parseContext.getResponse().getSelectedParses().isEmpty()) {
+                keyPipelineLog.info("[Wiki知识库->LLM Parse] 无可用解析，跳过LLM");
                 return;
             }
 
@@ -142,17 +170,27 @@ public class NL2SQLParser implements ChatQueryParser {
                     : parseContext.getResponse().getSelectedParses().get(0));
             parseContext.setResponse(new ChatParseResp(parseContext.getResponse().getQueryId()));
 
+            keyPipelineLog.info("[Wiki知识库->LLM Parse] 开始多轮改写");
             rewriteMultiTurn(parseContext, queryNLReq);
+            keyPipelineLog.info("[Wiki知识库->LLM Parse] 开始添加动态示例");
             addDynamicExemplars(parseContext, queryNLReq);
+            keyPipelineLog.info("[Wiki知识库->LLM Parse] 开始doParse");
             doParse(queryNLReq, parseContext.getResponse());
+            keyPipelineLog.info("[Wiki知识库->LLM Parse] doParse完成 | state:{}",
+                    parseContext.getResponse().getState());
 
             // try again with all semantic fields passed to LLM
             if (parseContext.getResponse().getState().equals(ParseResp.ParseState.FAILED)) {
+                keyPipelineLog.info("[Wiki知识库->LLM Parse] 解析失败，尝试ALL模式重试");
                 queryNLReq.setSelectedParseInfo(null);
                 queryNLReq.setMapModeEnum(MapModeEnum.ALL);
                 doParse(queryNLReq, parseContext.getResponse());
             }
         }
+        keyPipelineLog.info(
+                "[Wiki知识库->Parse] NL2SQLParser完成 | finalState:{} | selectedParsesSize:{}",
+                parseContext.getResponse().getState(),
+                parseContext.getResponse().getSelectedParses().size());
     }
 
     private void doParse(QueryNLReq req, ChatParseResp resp) {

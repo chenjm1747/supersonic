@@ -43,6 +43,11 @@
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.tencent.supersonic</groupId>
+            <artifactId>text2sql</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
     </dependencies>
 

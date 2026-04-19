@@ -5,6 +5,10 @@ import com.tencent.supersonic.common.util.DateUtils;
 import com.tencent.supersonic.headless.api.pojo.*;
 import com.tencent.supersonic.headless.chat.ChatQueryContext;
 import com.tencent.supersonic.headless.chat.parser.ParserConfig;
+import com.tencent.supersonic.headless.chat.parser.intent.IntentClassifierService;
+import com.tencent.supersonic.headless.chat.parser.intent.dto.IntentResult;
+import com.tencent.supersonic.headless.chat.parser.question.QuestionParserService;
+import com.tencent.supersonic.headless.chat.parser.question.dto.ParsedQuestion;
 import com.tencent.supersonic.headless.chat.query.llm.s2sql.LLMReq;
 import com.tencent.supersonic.headless.chat.query.llm.s2sql.LLMResp;
 import com.tencent.supersonic.headless.chat.utils.ComponentFactory;
@@ -13,6 +17,7 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -25,6 +30,12 @@ public class LLMRequestService {
 
     @Autowired
     private ParserConfig parserConfig;
+
+    @Autowired(required = false)
+    private QuestionParserService questionParserService;
+
+    @Autowired(required = false)
+    private IntentClassifierService intentClassifierService;
 
     public Long getDataSetId(ChatQueryContext queryCtx) {
         DataSetResolver dataSetResolver = ComponentFactory.getModelResolver();
@@ -70,7 +81,67 @@ public class LLMRequestService {
         llmReq.setChatAppConfig(queryCtx.getRequest().getChatAppConfig());
         llmReq.setDynamicExemplars(queryCtx.getRequest().getDynamicExemplars());
 
+        // Set multi-turn conversation context
+        setConversationContext(llmReq, queryCtx);
+
+        // Parse question and classify intent
+        parseAndClassifyQuestion(llmReq, queryCtx);
+
         return llmReq;
+    }
+
+    /**
+     * Parse the question and classify intent.
+     */
+    private void parseAndClassifyQuestion(LLMReq llmReq, ChatQueryContext queryCtx) {
+        String question = queryCtx.getRequest().getQueryText();
+        if (!StringUtils.hasText(question)) {
+            return;
+        }
+
+        // Parse question using QuestionParser
+        if (questionParserService != null) {
+            try {
+                ParsedQuestion parsedQuestion = questionParserService.parse(queryCtx);
+                if (parsedQuestion != null) {
+                    llmReq.setParsedQuestion(parsedQuestion);
+                    log.debug("Parsed question: timeExpressions={}, entities={}, conditions={}",
+                            parsedQuestion.getTimeExpressions().size(),
+                            parsedQuestion.getExtractedEntities().size(),
+                            parsedQuestion.getConditions().size());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse question: {}", question, e);
+            }
+        }
+
+        // Classify intent using IntentClassifier
+        if (intentClassifierService != null) {
+            try {
+                IntentResult intentResult = intentClassifierService.classify(question);
+                if (intentResult != null) {
+                    llmReq.setIntentResult(intentResult);
+                    log.debug("Classified intent: {} with confidence {}", intentResult.getIntent(),
+                            intentResult.getConfidence());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to classify intent: {}", question, e);
+            }
+        }
+    }
+
+    /**
+     * Set conversation context for multi-turn dialogue support. Note: Full context history will be
+     * loaded by the service layer using ConversationContextService.
+     */
+    private void setConversationContext(LLMReq llmReq, ChatQueryContext queryCtx) {
+        String conversationId = queryCtx.getRequest().getConversationId();
+        if (!StringUtils.hasText(conversationId)) {
+            return;
+        }
+
+        llmReq.setConversationId(conversationId);
+        log.debug("Set conversationId for multi-turn dialogue: {}", conversationId);
     }
 
     public LLMResp runText2SQL(LLMReq llmReq) {

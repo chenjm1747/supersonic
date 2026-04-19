@@ -132,23 +132,21 @@ public class HanlpHelper {
         HanLP.Config.CoreDictionaryPath = basePath + "/dictionary/CoreNatureDictionary.mini.txt";
         HanLP.Config.CoreDictionaryTransformMatrixDictionaryPath =
                 basePath + "/dictionary/CoreNatureDictionary.transform.matrix.bin";
-        // 禁用BiGramDictionary（可选词典，如果不存在会导致启动失败）
-        HanLP.Config.BiGramDictionaryPath = "";
+        HanLP.Config.BiGramDictionaryPath =
+                basePath + "/dictionary/CoreNatureDictionary.ngram.mini.txt";
         HanLP.Config.CoreStopWordDictionaryPath = basePath + "/dictionary/stopwords.txt";
         HanLP.Config.CoreSynonymDictionaryDictionaryPath =
                 basePath + "/dictionary/synonym/SynonymDictionary.txt";
-        HanLP.Config.PersonDictionaryPath = basePath + "/dictionary/person/names.txt";
-        HanLP.Config.PersonDictionaryTrPath = basePath + "/dictionary/person/names_tr.txt";
+        HanLP.Config.PersonDictionaryPath = basePath + "/dictionary/person/nr.txt";
+        HanLP.Config.PersonDictionaryTrPath = basePath + "/dictionary/person/nr.tr.txt";
         HanLP.Config.TranslatedPersonDictionaryPath =
                 basePath + "/dictionary/translate/TranslatedPerson.txt";
         HanLP.Config.JapanesePersonDictionaryPath =
                 basePath + "/dictionary/japan/japanese_names.drc";
-        HanLP.Config.PlaceDictionaryPath = basePath + "/dictionary/place/place.txt";
-        HanLP.Config.PlaceDictionaryTrPath = basePath + "/dictionary/place/place_tr.txt";
-        HanLP.Config.OrganizationDictionaryPath =
-                basePath + "/dictionary/organization/organization_names.txt";
-        HanLP.Config.OrganizationDictionaryTrPath =
-                basePath + "/dictionary/organization/organization_names_tr.txt";
+        HanLP.Config.PlaceDictionaryPath = basePath + "/dictionary/place/ns.txt";
+        HanLP.Config.PlaceDictionaryTrPath = basePath + "/dictionary/place/ns.tr.txt";
+        HanLP.Config.OrganizationDictionaryPath = basePath + "/dictionary/organization/nt.txt";
+        HanLP.Config.OrganizationDictionaryTrPath = basePath + "/dictionary/organization/nt.tr.txt";
         HanLP.Config.CharTypePath = basePath + "/dictionary/other/CharType.bin";
         HanLP.Config.CharTablePath = basePath + "/dictionary/other/CharTable.bin";
         HanLP.Config.PartOfSpeechTagDictionary =

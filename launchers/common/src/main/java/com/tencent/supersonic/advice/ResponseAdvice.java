@@ -3,6 +3,7 @@ package com.tencent.supersonic.advice;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.tencent.supersonic.common.pojo.ResultData;
+import com.tencent.supersonic.text2sql.BaseResp;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +46,9 @@ public class ResponseAdvice implements ResponseBodyAdvice<Object> {
             return objectMapper.writeValueAsString(ResultData.success(result));
         }
         if (result instanceof ResultData) {
+            return result;
+        }
+        if (result != null && result.getClass().getSimpleName().equals("BaseResp")) {
             return result;
         }
         return ResultData.success(result);

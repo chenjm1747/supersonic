@@ -11,10 +11,11 @@ import com.tencent.supersonic.common.util.StringUtil;
 import com.tencent.supersonic.headless.api.pojo.request.QueryStructReq;
 import com.tencent.supersonic.headless.core.config.ExecutorConfig;
 import com.tencent.supersonic.headless.core.pojo.StructQuery;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Triple;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
@@ -26,10 +27,9 @@ import java.util.stream.Collectors;
 import static com.tencent.supersonic.common.pojo.Constants.DAY_FORMAT;
 import static com.tencent.supersonic.common.pojo.Constants.JOIN_UNDERLINE;
 
-/** tools functions to analyze queryStructReq */
 @Component
-@Slf4j
 public class SqlGenerateUtils {
+    private static final Logger log = LoggerFactory.getLogger(SqlGenerateUtils.class);
 
     private final SqlFilterUtils sqlFilterUtils;
 

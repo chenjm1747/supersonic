@@ -80,7 +80,12 @@ public class ChatWorkflowEngine {
                     queryCtx.setChatWorkflowState(ChatWorkflowState.PHYSICAL_SQL_CORRECTING);
                     break;
                 case PHYSICAL_SQL_CORRECTING:
-                    performPhysicalSqlCorrecting(queryCtx);
+                    try {
+                        performPhysicalSqlCorrecting(queryCtx);
+                    } catch (Exception e) {
+                        log.warn("Physical SQL correcting failed, continue with original query: {}",
+                                e.getMessage());
+                    }
                     queryCtx.setChatWorkflowState(ChatWorkflowState.FINISHED);
                     break;
                 default:
@@ -159,8 +164,9 @@ public class ChatWorkflowEngine {
                         StringUtils.normalizeSpace(parseInfo.getSqlInfo().getQuerySQL()));
             } catch (Exception e) {
                 log.warn("get sql info failed:{}", e);
+                String friendlyErrorMsg = getFriendlyErrorMessage(e);
                 errorMsg.add(String.format("S2SQL:%s %s", parseInfo.getSqlInfo().getParsedS2SQL(),
-                        e.getMessage()));
+                        friendlyErrorMsg));
             }
         });
         if (!errorMsg.isEmpty()) {
@@ -175,7 +181,6 @@ public class ChatWorkflowEngine {
                 for (SemanticCorrector corrector : semanticCorrectors) {
                     if (corrector instanceof LLMPhysicalSqlCorrector) {
                         corrector.correct(queryCtx, semanticQuery.getParseInfo());
-                        // 如果物理SQL被修正了，更新querySQL为修正后的版本
                         SemanticParseInfo parseInfo = semanticQuery.getParseInfo();
                         if (StringUtils.isNotBlank(parseInfo.getSqlInfo().getCorrectedQuerySQL())) {
                             parseInfo.getSqlInfo()
@@ -187,6 +192,26 @@ public class ChatWorkflowEngine {
                     }
                 }
             }
+        }
+    }
+
+    private String getFriendlyErrorMessage(Exception e) {
+        String msg = e.getMessage();
+        if (msg == null) {
+            return "未知错误";
+        }
+        if (msg.contains("data model not found")) {
+            return "无法找到对应的数据模型，请检查数据集配置";
+        } else if (msg.contains("Table") && msg.contains("not found")) {
+            return "数据表不存在，请检查数据模型配置";
+        } else if (msg.contains("column") && msg.contains("not found")) {
+            return "数据列不存在，请检查数据模型配置";
+        } else if (msg.contains("timeout")) {
+            return "查询超时，请尝试缩小查询范围";
+        } else if (msg.contains("connection")) {
+            return "数据库连接失败，请检查数据库配置";
+        } else {
+            return "查询执行失败：" + msg;
         }
     }
 }

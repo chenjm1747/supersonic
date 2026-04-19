@@ -1,5 +1,6 @@
 package com.tencent.supersonic.headless.chat.parser.llm;
 
+import com.google.gson.JsonSyntaxException;
 import com.tencent.supersonic.common.pojo.ChatModelConfig;
 import com.tencent.supersonic.common.util.ContextUtils;
 import com.tencent.supersonic.headless.chat.ChatQueryContext;
@@ -22,14 +23,16 @@ import java.util.Objects;
 @Slf4j
 public class LLMSqlParser implements SemanticParser {
 
+    private static final String ERR_MSG_JSON_PARSE_FAILED = "LLM返回格式解析失败，请尝试换一种方式提问";
+    private static final String ERR_MSG_LLM_TIMEOUT = "LLM服务响应超时，请稍后重试";
+    private static final String ERR_MSG_LLM_UNKNOWN = "LLM服务调用失败，请稍后重试";
+
     @Override
     public void parse(ChatQueryContext queryCtx) {
         try {
-            // 1.determine whether to skip this parser.
             if (!queryCtx.getRequest().getText2SQLType().enableLLM()) {
                 return;
             }
-            // 2.get dataSetId from queryCtx and chatCtx.
             LLMRequestService requestService = ContextUtils.getBean(LLMRequestService.class);
             Long dataSetId = requestService.getDataSetId(queryCtx);
             if (dataSetId == null) {
@@ -38,11 +41,23 @@ public class LLMSqlParser implements SemanticParser {
             log.info("try generating query statement for query:{}, dataSetId:{}",
                     queryCtx.getRequest().getQueryText(), dataSetId);
 
-            // 3.invoke LLM service to do parsing.
             tryParse(queryCtx, dataSetId);
         } catch (Exception e) {
             log.error("failed to parse query:", e);
+            setUserFriendlyErrorMsg(queryCtx, e);
         }
+    }
+
+    private void setUserFriendlyErrorMsg(ChatQueryContext queryCtx, Exception e) {
+        String errMsg;
+        if (e instanceof JsonSyntaxException || e.getCause() instanceof JsonSyntaxException) {
+            errMsg = ERR_MSG_JSON_PARSE_FAILED;
+        } else if (e.getMessage() != null && e.getMessage().contains("timeout")) {
+            errMsg = ERR_MSG_LLM_TIMEOUT;
+        } else {
+            errMsg = ERR_MSG_LLM_UNKNOWN;
+        }
+        queryCtx.getParseResp().setErrorMsg(errMsg);
     }
 
     private void tryParse(ChatQueryContext queryCtx, Long dataSetId) {
@@ -55,12 +70,13 @@ public class LLMSqlParser implements SemanticParser {
         int currentRetry = 1;
         Map<String, LLMSqlResp> sqlRespMap = new HashMap<>();
         ParseResult parseResult = null;
+        String lastErrorMsg = null;
+
         while (currentRetry <= maxRetries) {
             log.info("currentRetryRound:{}, start runText2SQL", currentRetry);
             try {
                 LLMResp llmResp = requestService.runText2SQL(llmReq);
                 if (Objects.nonNull(llmResp)) {
-                    // deduplicate the S2SQL result list and build parserInfo
                     sqlRespMap = responseService.getDeduplicationSqlResp(currentRetry, llmResp);
                     if (MapUtils.isNotEmpty(sqlRespMap)) {
                         parseResult = ParseResult.builder().dataSetId(dataSetId).llmReq(llmReq)
@@ -70,23 +86,36 @@ public class LLMSqlParser implements SemanticParser {
                 }
             } catch (Exception e) {
                 log.error("currentRetryRound:{}, runText2SQL failed", currentRetry, e);
+                lastErrorMsg = getFriendlyErrorMessage(e);
             }
             ChatModelConfig chatModelConfig = llmReq.getChatAppConfig()
                     .get(OnePassSCSqlGenStrategy.APP_KEY).getChatModelConfig();
             Double temperature = chatModelConfig.getTemperature();
             if (temperature == 0) {
-                // 报错时增加随机性，减少无效重试
                 chatModelConfig.setTemperature(0.5);
             }
             currentRetry++;
         }
         if (MapUtils.isEmpty(sqlRespMap)) {
+            if (lastErrorMsg != null) {
+                queryCtx.getParseResp().setErrorMsg(lastErrorMsg);
+            }
             return;
         }
         for (Entry<String, LLMSqlResp> entry : sqlRespMap.entrySet()) {
             String sql = entry.getKey();
             double sqlWeight = entry.getValue().getSqlWeight();
             responseService.addParseInfo(queryCtx, parseResult, sql, sqlWeight);
+        }
+    }
+
+    private String getFriendlyErrorMessage(Exception e) {
+        if (e instanceof JsonSyntaxException || e.getCause() instanceof JsonSyntaxException) {
+            return ERR_MSG_JSON_PARSE_FAILED;
+        } else if (e.getMessage() != null && e.getMessage().toLowerCase().contains("timeout")) {
+            return ERR_MSG_LLM_TIMEOUT;
+        } else {
+            return ERR_MSG_LLM_UNKNOWN + "：" + e.getClass().getSimpleName();
         }
     }
 }

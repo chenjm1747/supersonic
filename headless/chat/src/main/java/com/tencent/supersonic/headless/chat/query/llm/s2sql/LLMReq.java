@@ -29,6 +29,15 @@ public class LLMReq {
     private String customPrompt;
     private List<Text2SQLExemplar> dynamicExemplars;
 
+    // Multi-turn conversation support
+    private String conversationId;
+    private List<ConversationHistory> contextHistory;
+    private String contextualPrompt;
+
+    // Question parsing and intent classification
+    private com.tencent.supersonic.headless.chat.parser.question.dto.ParsedQuestion parsedQuestion;
+    private com.tencent.supersonic.headless.chat.parser.intent.dto.IntentResult intentResult;
+
     @Data
     public static class ElementValue {
         private String fieldName;
@@ -73,6 +82,19 @@ public class LLMReq {
         private String name;
         private String description;
         private List<String> alias = Lists.newArrayList();
+    }
+
+    /**
+     * Conversation history entry for multi-turn dialogue support.
+     */
+    @Data
+    public static class ConversationHistory {
+        private Integer roundNumber;
+        private String userMessage;
+        private String generatedSql;
+        private String contextValue;
+        private List<String> referencedEntities;
+        private List<String> referencedCards;
     }
 
     public enum SqlGenType {

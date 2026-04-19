@@ -32,6 +32,12 @@ public class ChatQueryContext implements Serializable {
     private SemanticSchema semanticSchema;
     private ChatWorkflowState chatWorkflowState;
 
+    private List<com.tencent.supersonic.headless.core.wiki.dto.WikiEntity> wikiEntities =
+            new ArrayList<>();
+    private List<com.tencent.supersonic.headless.core.wiki.dto.WikiKnowledgeCard> wikiKnowledgeCards =
+            new ArrayList<>();
+    private String wikiContext;
+
     public ChatQueryContext() {
         this(new QueryNLReq());
     }

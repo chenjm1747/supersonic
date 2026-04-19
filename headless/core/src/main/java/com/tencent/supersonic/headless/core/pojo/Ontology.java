@@ -5,16 +5,10 @@ import com.tencent.supersonic.headless.api.pojo.response.DatabaseResp;
 import com.tencent.supersonic.headless.api.pojo.response.DimSchemaResp;
 import com.tencent.supersonic.headless.api.pojo.response.MetricSchemaResp;
 import com.tencent.supersonic.headless.api.pojo.response.ModelResp;
-import lombok.Data;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * An ontology comprises a group of data models that can be joined together either in star schema or
- * snowflake schema.
- */
-@Data
 public class Ontology {
 
     private DatabaseResp database;
@@ -46,4 +40,43 @@ public class Ontology {
         return null;
     }
 
+    public DatabaseResp getDatabase() {
+        return database;
+    }
+
+    public void setDatabase(DatabaseResp database) {
+        this.database = database;
+    }
+
+    public Map<String, ModelResp> getModelMap() {
+        return modelMap;
+    }
+
+    public void setModelMap(Map<String, ModelResp> modelMap) {
+        this.modelMap = modelMap;
+    }
+
+    public Map<String, List<MetricSchemaResp>> getMetricMap() {
+        return metricMap;
+    }
+
+    public void setMetricMap(Map<String, List<MetricSchemaResp>> metricMap) {
+        this.metricMap = metricMap;
+    }
+
+    public Map<String, List<DimSchemaResp>> getDimensionMap() {
+        return dimensionMap;
+    }
+
+    public void setDimensionMap(Map<String, List<DimSchemaResp>> dimensionMap) {
+        this.dimensionMap = dimensionMap;
+    }
+
+    public List<JoinRelation> getJoinRelations() {
+        return joinRelations;
+    }
+
+    public void setJoinRelations(List<JoinRelation> joinRelations) {
+        this.joinRelations = joinRelations;
+    }
 }

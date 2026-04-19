@@ -67,7 +67,7 @@ public class WikiHealthController {
         try {
             if ("FULL".equals(type)) {
                 WikiHealthReport report = healthService.generateDailyReport();
-                return BaseResp.ok();
+                return BaseResp.ok(null);
             }
             return BaseResp.fail("Unknown check type: " + type);
         } catch (Exception e) {

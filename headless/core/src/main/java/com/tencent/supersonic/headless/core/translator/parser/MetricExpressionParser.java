@@ -9,19 +9,17 @@ import com.tencent.supersonic.headless.api.pojo.response.SemanticSchemaResp;
 import com.tencent.supersonic.headless.core.pojo.OntologyQuery;
 import com.tencent.supersonic.headless.core.pojo.QueryStatement;
 import com.tencent.supersonic.headless.core.pojo.SqlQuery;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
 import java.util.*;
 
-/**
- * This parser replaces metric bizName in the S2SQL with calculation expression (if configured).
- */
-@Component("MetricExpressionParser")
-@Slf4j
 public class MetricExpressionParser implements QueryParser {
+    private static final Logger log = LoggerFactory.getLogger(MetricExpressionParser.class);
+
     @Override
     public boolean accept(QueryStatement queryStatement) {
         return Objects.nonNull(queryStatement.getSqlQuery())
@@ -68,7 +66,6 @@ public class MetricExpressionParser implements QueryParser {
         for (MetricSchemaResp queryMetric : queryMetrics) {
             String fieldExpr = buildFieldExpr(allMetrics, allMeasures, queryMetric.getExpr(),
                     queryMetric.getMetricDefineType(), visitedMetrics);
-            // add all fields referenced in the expression
             queryMetric.getFields().addAll(SqlSelectHelper.getFieldsFromExpr(fieldExpr));
             queryFields.addAll(queryMetric.getFields());
             if (!queryMetric.getBizName().equals(fieldExpr)) {
@@ -88,7 +85,6 @@ public class MetricExpressionParser implements QueryParser {
             for (String field : fields) {
                 switch (metricDefineType) {
                     case METRIC:
-                        // if defineType=METRIC, field should be the bizName of its parent metric
                         Optional<MetricSchemaResp> metricItem = metricResps.stream()
                                 .filter(m -> m.getBizName().equalsIgnoreCase(field)).findFirst();
                         if (metricItem.isPresent()) {
@@ -104,7 +100,6 @@ public class MetricExpressionParser implements QueryParser {
                         }
                         break;
                     case MEASURE:
-                        // if defineType=MEASURE, field should be the bizName of its measure
                         if (allMeasures.containsKey(field)) {
                             Measure measure = allMeasures.get(field);
                             String expr = metricExpr;

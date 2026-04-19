@@ -97,12 +97,16 @@ public class AutoKnowledgeGenerator {
     }
 
     private WikiKnowledgeCard generateBusinessRule(WikiEntity table, WikiEntity column) {
-        Map<String, String> properties = column.getProperties();
+        Map<String, Object> properties = column.getProperties();
         if (properties == null) {
             return null;
         }
 
-        String businessNote = properties.get("businessNote");
+        Object businessNoteObj = properties.get("businessNote");
+        if (businessNoteObj == null) {
+            return null;
+        }
+        String businessNote = businessNoteObj.toString();
         if (businessNote == null || businessNote.isEmpty()) {
             return null;
         }
@@ -134,7 +138,8 @@ public class AutoKnowledgeGenerator {
 
     private WikiKnowledgeCard generateUsagePattern(WikiEntity table, WikiEntity column) {
         // Generate basic usage pattern based on data type
-        String dataType = column.getProperties() != null ? column.getProperties().get("dataType") : null;
+        Map<String, Object> props = column.getProperties();
+        String dataType = props != null && props.get("dataType") != null ? props.get("dataType").toString() : null;
         if (dataType == null) {
             return null;
         }

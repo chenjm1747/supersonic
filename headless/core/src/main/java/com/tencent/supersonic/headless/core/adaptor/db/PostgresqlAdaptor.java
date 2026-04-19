@@ -7,9 +7,10 @@ import com.tencent.supersonic.common.pojo.enums.TimeDimensionEnum;
 import com.tencent.supersonic.headless.api.pojo.DBColumn;
 import com.tencent.supersonic.headless.api.pojo.enums.FieldType;
 import com.tencent.supersonic.headless.core.pojo.ConnectInfo;
-import lombok.extern.slf4j.Slf4j;
 import net.sf.jsqlparser.expression.StringValue;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -20,8 +21,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
-@Slf4j
 public class PostgresqlAdaptor extends BaseDbAdaptor {
+    private static final Logger log = LoggerFactory.getLogger(PostgresqlAdaptor.class);
 
     @Override
     public String getDateFormat(String dateType, String dateFormat, String column) {

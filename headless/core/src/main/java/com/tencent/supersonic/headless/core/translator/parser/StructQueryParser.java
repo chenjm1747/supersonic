@@ -5,18 +5,15 @@ import com.tencent.supersonic.headless.core.pojo.QueryStatement;
 import com.tencent.supersonic.headless.core.pojo.SqlQuery;
 import com.tencent.supersonic.headless.core.pojo.StructQuery;
 import com.tencent.supersonic.headless.core.utils.SqlGenerateUtils;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.Objects;
 
-/**
- * This parser converts struct semantic query into sql query by generating S2SQL based on structured
- * semantic information.
- */
 @Component("StructQueryParser")
-@Slf4j
 public class StructQueryParser implements QueryParser {
+    private static final Logger log = LoggerFactory.getLogger(StructQueryParser.class);
 
     @Override
     public boolean accept(QueryStatement queryStatement) {
@@ -42,7 +39,7 @@ public class StructQueryParser implements QueryParser {
         if (!sqlGenerateUtils.isSupportWith(queryStatement.getOntology().getDatabaseType(),
                 queryStatement.getOntology().getDatabaseVersion())) {
             sqlQuery.setSupportWith(false);
-            sql = String.format("select %s from %s t0 %s %s %s",
+            sql = String.format("select %s from %s %s %s %s",
                     sqlGenerateUtils.getSelect(structQuery), dsTable,
                     sqlGenerateUtils.getGroupBy(structQuery),
                     sqlGenerateUtils.getOrderBy(structQuery),
@@ -54,5 +51,4 @@ public class StructQueryParser implements QueryParser {
 
         log.info("parse structQuery [{}] ", queryStatement.getSqlQuery());
     }
-
 }

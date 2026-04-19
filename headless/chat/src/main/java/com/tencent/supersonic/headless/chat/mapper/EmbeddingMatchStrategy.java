@@ -53,8 +53,11 @@ public class EmbeddingMatchStrategy extends BatchMatchStrategy<EmbeddingResult> 
                     1. Based on user query and retrieved info, accurately determine metrics/dimensions user truly cares about.
                     2. Do not return all retrieved info, only select those highly relevant to user query.
                     3. Maintain high quality output, exclude metrics/dimensions irrelevant to user intent.
-                    4. Output must be in JSON array format, only include IDs from retrieved info, e.g.: ['id1', 'id2']
-                    5. Return JSON content directly without markdown formatting
+                    4. Output must be a plain JSON array format containing only IDs from retrieved info.
+                       Example: ["metric_53","dimension_74"]
+                       - Use double quotes, not single quotes
+                       - No markdown code blocks
+                       - No additional text or explanation
                     #Input Example:
                     #User Query: {{userText}}
                     #Retrieved Metrics/Dimensions: {{retrievedInfo}}
@@ -171,16 +174,42 @@ public class EmbeddingMatchStrategy extends BatchMatchStrategy<EmbeddingResult> 
                 chatModelConfig = chatQueryContext.getRequest().getChatAppConfig()
                         .get("REWRITE_MULTI_TURN").getChatModelConfig();
             }
-            ChatLanguageModel chatLanguageModel = ModelProvider.getChatModel(chatModelConfig);
-            String response = chatLanguageModel.generate(prompt.toUserMessage().singleText());
+            try {
+                ChatLanguageModel chatLanguageModel = ModelProvider.getChatModel(chatModelConfig);
+                String response = chatLanguageModel.generate(prompt.toUserMessage().singleText());
 
-            if (StringUtils.isBlank(response)) {
-                results.clear();
-            } else {
-                List<String> retrievedIds = JSONObject.parseArray(response, String.class);
-                results = results.stream().filter(t -> retrievedIds.contains(t.getId()))
-                        .collect(Collectors.toSet());
-                results.forEach(r -> r.setLlmMatched(true));
+                if (StringUtils.isBlank(response)) {
+                    results.clear();
+                } else {
+                    try {
+                        String cleanResponse = response.trim();
+                        if (cleanResponse.startsWith("```")) {
+                            cleanResponse = cleanResponse.replaceAll("^```(?:json)?\\s*", "")
+                                    .replaceAll("\\s*```$", "");
+                        }
+                        int thinkEndIndex = cleanResponse.lastIndexOf("</think>");
+                        if (thinkEndIndex >= 0 && thinkEndIndex < cleanResponse.length() - 6) {
+                            cleanResponse = cleanResponse.substring(thinkEndIndex + 7).trim();
+                        }
+                        int jsonStart = cleanResponse.indexOf('[');
+                        int jsonEnd = cleanResponse.lastIndexOf(']');
+                        if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                            cleanResponse = cleanResponse.substring(jsonStart, jsonEnd + 1);
+                        }
+                        List<String> retrievedIds =
+                                JSONObject.parseArray(cleanResponse, String.class);
+                        results = results.stream().filter(t -> retrievedIds.contains(t.getId()))
+                                .collect(Collectors.toSet());
+                        results.forEach(r -> r.setLlmMatched(true));
+                    } catch (Exception e) {
+                        log.error("Failed to parse LLM response as JSON array, response: {}",
+                                response, e);
+                        results.clear();
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("LLM filtering failed, continue with embedding results: {}",
+                        e.getMessage());
             }
         }
 

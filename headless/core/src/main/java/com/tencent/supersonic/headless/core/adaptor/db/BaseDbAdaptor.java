@@ -4,7 +4,8 @@ import com.google.common.collect.Lists;
 import com.tencent.supersonic.headless.api.pojo.DBColumn;
 import com.tencent.supersonic.headless.api.pojo.enums.FieldType;
 import com.tencent.supersonic.headless.core.pojo.ConnectInfo;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -12,8 +13,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 
-@Slf4j
 public abstract class BaseDbAdaptor implements DbAdaptor {
+    protected static final Logger log = LoggerFactory.getLogger(BaseDbAdaptor.class);
 
     @Override
     public List<String> getCatalogs(ConnectInfo connectInfo) throws SQLException {
@@ -29,8 +30,6 @@ public abstract class BaseDbAdaptor implements DbAdaptor {
     }
 
     public List<String> getDBs(ConnectInfo connectionInfo, String catalog) throws SQLException {
-        // Except for special types implemented separately, the generic logic catalog does not take
-        // effect.
         return getDBs(connectionInfo);
     }
 
@@ -64,8 +63,6 @@ public abstract class BaseDbAdaptor implements DbAdaptor {
     @Override
     public List<String> getTables(ConnectInfo connectInfo, String catalog, String schemaName)
             throws SQLException {
-        // Except for special types implemented separately, the generic logic catalog does not take
-        // effect.
         return getTables(connectInfo, schemaName);
     }
 
@@ -97,7 +94,6 @@ public abstract class BaseDbAdaptor implements DbAdaptor {
     public List<DBColumn> getColumns(ConnectInfo connectInfo, String catalog, String schemaName,
             String tableName) throws SQLException {
         List<DBColumn> dbColumns = new ArrayList<>();
-        // 确保连接会自动关闭
         try (ResultSet columns =
                 getDatabaseMetaData(connectInfo).getColumns(catalog, schemaName, tableName, null)) {
             while (columns.next()) {
@@ -146,20 +142,16 @@ public abstract class BaseDbAdaptor implements DbAdaptor {
         final Properties properties = new Properties();
         String url = connectionInfo.getUrl().toLowerCase();
 
-        // 设置通用属性
         String userName = Optional.ofNullable(connectionInfo.getUserName()).orElse("");
         properties.setProperty("user", userName);
 
 
         String password = Optional.ofNullable(connectionInfo.getPassword()).orElse("");
-        // 针对 Presto 和 Trino ssl=false 的情况，不需要设置密码
         if (url.startsWith("jdbc:presto") || url.startsWith("jdbc:trino")) {
-            // 检查是否需要处理 SSL
             if (!url.contains("ssl=false")) {
                 properties.setProperty("password", password);
             }
         } else {
-            // 针对其他数据库类型
             properties.setProperty("password", password);
         }
 

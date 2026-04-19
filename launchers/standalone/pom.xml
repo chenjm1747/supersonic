@@ -78,6 +78,11 @@
         </dependency>
         <dependency>
             <groupId>com.tencent.supersonic</groupId>
+            <artifactId>text2sql</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.tencent.supersonic</groupId>
             <artifactId>auth-api</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -152,14 +157,8 @@
                 <version>3.3.9</version>
                 <configuration>
                     <mainClass>${start-class}</mainClass>
+                    <skip>true</skip>
                 </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>repackage</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -172,7 +171,7 @@
                 <version>3.7.1</version>
                 <configuration>
                     <tarLongFileMode>gnu</tarLongFileMode>
-                    <skipAssembly>true</skipAssembly>
+                    <skipAssembly>false</skipAssembly>
                     <archive>
                         <manifest>
                             <mainClass>${start-class}</mainClass>

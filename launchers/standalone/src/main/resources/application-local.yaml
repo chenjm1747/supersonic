@@ -1,0 +1,44 @@
+spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://192.168.1.10:5432/postgres?stringtype=unspecified&currentSchema=heating_analytics
+    username: postgres
+    password: Huilian1234
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+  sql:
+    init:
+      continue-on-error: true
+      mode: never
+      schema-locations:
+        - classpath:db/schema-postgres.sql
+        - classpath:db/schema-postgres-demo.sql
+      data-locations:
+        - classpath:db/data-postgres.sql
+        - classpath:db/data-postgres-demo.sql
+
+s2:
+  embedding:
+    store:
+      provider: PGVECTOR
+      dimension: 1024
+      baseUrl: 192.168.1.10
+      port: 5432
+      databaseName: postgres
+      user: postgres
+      password: Huilian1234
+
+text2sql:
+  enabled: false
+  knowledge:
+    sql-file-path: e:\trae\supersonic\sql\charge_zbhx_20260303.sql
+    target-tables: customer,sf_js_t,pay_order,contract_info,area
+  llm:
+    provider: OPEN_AI
+    base-url: https://api.minimaxi.com/v1
+    model-name: MiniMax-M2.7
+    api-key: sk-cp-FWl4LepeyUkDxZ0iE9NJ-SqVcTEW3yqPbLtwf4PeQlM3M_YgVfquhqH74XbqSF7mzfboj5gjtVbK8GrxTmsW6PPvhQ9ta2A416UxziM3kodzJdrOHYCDYKM
+    temperature: 0.0
+    timeout: 120

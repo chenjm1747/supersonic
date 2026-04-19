@@ -4,8 +4,9 @@ import com.tencent.supersonic.common.pojo.exception.InvalidArgumentException;
 import com.tencent.supersonic.headless.api.pojo.Param;
 import com.tencent.supersonic.headless.api.pojo.SqlVariable;
 import com.tencent.supersonic.headless.api.pojo.enums.VariableValueType;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.util.CollectionUtils;
 import org.stringtemplate.v4.ST;
 
@@ -20,8 +21,8 @@ import java.util.stream.Collectors;
 import static com.tencent.supersonic.common.pojo.Constants.COMMA;
 import static com.tencent.supersonic.common.pojo.Constants.EMPTY;
 
-@Slf4j
 public class SqlVariableParseUtils {
+    private static final Logger log = LoggerFactory.getLogger(SqlVariableParseUtils.class);
 
     public static final String REG_SENSITIVE_SQL =
             "drop\\s|alter\\s|grant\\s|insert\\s|replace\\s|delete\\s|"
@@ -37,13 +38,11 @@ public class SqlVariableParseUtils {
         if (CollectionUtils.isEmpty(sqlVariables)) {
             return sql;
         }
-        // 1. handle default variable value
         sqlVariables.forEach(variable -> {
             variables.put(variable.getName().trim(),
                     getValues(variable.getValueType(), variable.getDefaultValues()));
         });
 
-        // override by variable param
         if (!CollectionUtils.isEmpty(params)) {
             Map<String, List<SqlVariable>> map =
                     sqlVariables.stream().collect(Collectors.groupingBy(SqlVariable::getName));

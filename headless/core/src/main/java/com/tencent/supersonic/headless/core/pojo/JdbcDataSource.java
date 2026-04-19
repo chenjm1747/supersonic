@@ -4,8 +4,8 @@ import com.alibaba.druid.pool.DruidDataSource;
 import com.tencent.supersonic.headless.api.pojo.enums.DataType;
 import com.tencent.supersonic.headless.api.pojo.response.DatabaseResp;
 import com.tencent.supersonic.headless.core.utils.JdbcDataSourceUtils;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -16,81 +16,132 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-@Slf4j
 @Component
 public class JdbcDataSource {
+    private static final Logger log = LoggerFactory.getLogger(JdbcDataSource.class);
 
     private static final Object lockLock = new Object();
     private static volatile Map<String, DruidDataSource> dataSourceMap = new ConcurrentHashMap<>();
     private static volatile Map<String, Lock> dataSourceLockMap = new ConcurrentHashMap<>();
 
     @Value("${source.lock-time:30}")
-    @Getter
     protected Long lockTime;
 
     @Value("${source.max-active:2}")
-    @Getter
     protected int maxActive;
 
     @Value("${source.initial-size:0}")
-    @Getter
     protected int initialSize;
 
     @Value("${source.min-idle:1}")
-    @Getter
     protected int minIdle;
 
     @Value("${source.max-wait:60000}")
-    @Getter
     protected long maxWait;
 
     @Value("${source.time-between-eviction-runs-millis:2000}")
-    @Getter
     protected long timeBetweenEvictionRunsMillis;
 
     @Value("${source.min-evictable-idle-time-millis:600000}")
-    @Getter
     protected long minEvictableIdleTimeMillis;
 
     @Value("${source.max-evictable-idle-time-millis:900000}")
-    @Getter
     protected long maxEvictableIdleTimeMillis;
 
     @Value("${source.time-between-connect-error-millis:60000}")
-    @Getter
     protected long timeBetweenConnectErrorMillis;
 
     @Value("${source.test-while-idle:true}")
-    @Getter
     protected boolean testWhileIdle;
 
     @Value("${source.test-on-borrow:false}")
-    @Getter
     protected boolean testOnBorrow;
 
     @Value("${source.test-on-return:false}")
-    @Getter
     protected boolean testOnReturn;
 
     @Value("${source.break-after-acquire-failure:true}")
-    @Getter
     protected boolean breakAfterAcquireFailure;
 
     @Value("${source.connection-error-retry-attempts:1}")
-    @Getter
     protected int connectionErrorRetryAttempts;
 
     @Value("${source.keep-alive:false}")
-    @Getter
     protected boolean keepAlive;
 
     @Value("${source.validation-query-timeout:5}")
-    @Getter
     protected int validationQueryTimeout;
 
     @Value("${source.validation-query:select 1}")
-    @Getter
     protected String validationQuery;
+
+    public Long getLockTime() {
+        return lockTime;
+    }
+
+    public int getMaxActive() {
+        return maxActive;
+    }
+
+    public int getInitialSize() {
+        return initialSize;
+    }
+
+    public int getMinIdle() {
+        return minIdle;
+    }
+
+    public long getMaxWait() {
+        return maxWait;
+    }
+
+    public long getTimeBetweenEvictionRunsMillis() {
+        return timeBetweenEvictionRunsMillis;
+    }
+
+    public long getMinEvictableIdleTimeMillis() {
+        return minEvictableIdleTimeMillis;
+    }
+
+    public long getMaxEvictableIdleTimeMillis() {
+        return maxEvictableIdleTimeMillis;
+    }
+
+    public long getTimeBetweenConnectErrorMillis() {
+        return timeBetweenConnectErrorMillis;
+    }
+
+    public boolean isTestWhileIdle() {
+        return testWhileIdle;
+    }
+
+    public boolean isTestOnBorrow() {
+        return testOnBorrow;
+    }
+
+    public boolean isTestOnReturn() {
+        return testOnReturn;
+    }
+
+    public boolean isBreakAfterAcquireFailure() {
+        return breakAfterAcquireFailure;
+    }
+
+    public int getConnectionErrorRetryAttempts() {
+        return connectionErrorRetryAttempts;
+    }
+
+    public boolean isKeepAlive() {
+        return keepAlive;
+    }
+
+    public int getValidationQueryTimeout() {
+        return validationQueryTimeout;
+    }
+
+    public String getValidationQuery() {
+        return validationQuery;
+    }
 
     private Lock getDataSourceLock(String key) {
         if (dataSourceLockMap.containsKey(key)) {
@@ -202,7 +253,6 @@ public class JdbcDataSource {
             druidDataSource.setRemoveAbandonedTimeout(3600 + 5 * 60);
             druidDataSource.setLogAbandoned(true);
 
-            // default validation query
             String driverName = druidDataSource.getDriverClassName();
             if (driverName.indexOf("sqlserver") != -1 || driverName.indexOf("mysql") != -1
                     || driverName.indexOf("h2") != -1 || driverName.indexOf("moonbox") != -1) {

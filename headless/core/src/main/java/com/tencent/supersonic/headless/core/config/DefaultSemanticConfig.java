@@ -1,11 +1,9 @@
 package com.tencent.supersonic.headless.core.config;
 
-import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@Data
 public class DefaultSemanticConfig {
 
     @Value("${s2.semantic.url.prefix:http://localhost:8081}")
@@ -40,4 +38,48 @@ public class DefaultSemanticConfig {
 
     @Value("${s2.explain.path:/api/semantic/query/explain}")
     private String explainPath;
+
+    public String getSemanticUrl() {
+        return semanticUrl;
+    }
+
+    public String getSearchByStructPath() {
+        return searchByStructPath;
+    }
+
+    public String getSearchByMultiStructPath() {
+        return searchByMultiStructPath;
+    }
+
+    public String getSearchBySqlPath() {
+        return searchBySqlPath;
+    }
+
+    public String getQueryDimValuePath() {
+        return queryDimValuePath;
+    }
+
+    public String getFetchModelSchemaPath() {
+        return fetchModelSchemaPath;
+    }
+
+    public String getFetchDimensionPagePath() {
+        return fetchDimensionPagePath;
+    }
+
+    public String getFetchMetricPagePath() {
+        return fetchMetricPagePath;
+    }
+
+    public String getFetchDomainListPath() {
+        return fetchDomainListPath;
+    }
+
+    public String getFetchModelListPath() {
+        return fetchModelListPath;
+    }
+
+    public String getExplainPath() {
+        return explainPath;
+    }
 }

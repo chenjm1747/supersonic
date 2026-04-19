@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -913,7 +914,20 @@ public class WikiController {
             @RequestParam(defaultValue = "30") int days) {
         BaseResp<CompoundingTrend> resp = new BaseResp<>();
         try {
-            CompoundingTrend trend = knowledgeService.getCompoundingTrend(days);
+            List<Map<String, Object>> rawTrend = knowledgeService.getCompoundingTrend(days);
+            CompoundingTrend trend = new CompoundingTrend();
+            trend.setDays(days);
+            List<TrendPoint> points = new ArrayList<>();
+            for (Map<String, Object> row : rawTrend) {
+                TrendPoint point = new TrendPoint();
+                point.setDate(row.get("date") != null ? row.get("date").toString() : "");
+                Object successCount = row.get("success_count");
+                point.setUsageCount(successCount != null ? ((Number) successCount).intValue() : 0);
+                Object avgConf = row.get("avg_confidence");
+                point.setAvgConfidence(avgConf != null ? ((Number) avgConf).doubleValue() : null);
+                points.add(point);
+            }
+            trend.setTrendPoints(points);
             resp.setSuccess(true);
             resp.setData(trend);
             resp.setMessage("Get compounding trend successfully");

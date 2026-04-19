@@ -30,6 +30,16 @@ const ROUTES = [
     component: './ChatPage',
     envEnableList: [ENV_KEY.CHAT],
   },
+  {
+    path: '/text2sql',
+    name: 'text2sql',
+    component: './Text2Sql/KnowledgeBase',
+  },
+  {
+    path: '/wiki',
+    name: 'wiki',
+    component: './Wiki',
+  },
   // {
   //   path: '/chatSetting/model/:domainId?/:modelId?/:menuKey?',
   //   component: './SemanticModel/ChatSetting/ChatSetting',

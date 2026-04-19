@@ -1,10 +1,8 @@
 package com.tencent.supersonic.headless.core.config;
 
-import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
-@Data
 @Configuration
 public class ExecutorConfig {
 
@@ -34,4 +32,40 @@ public class ExecutorConfig {
 
     @Value("${s2.accelerator.duckDb.threads:32}")
     private Integer threads;
+
+    public String getMysqlLowVersion() {
+        return mysqlLowVersion;
+    }
+
+    public String getCkLowVersion() {
+        return ckLowVersion;
+    }
+
+    public String getInternalMetricNameSuffix() {
+        return internalMetricNameSuffix;
+    }
+
+    public Boolean getDuckEnable() {
+        return duckEnable;
+    }
+
+    public String getDuckDbTemp() {
+        return duckDbTemp;
+    }
+
+    public Integer getDuckDbMaximumPoolSize() {
+        return duckDbMaximumPoolSize;
+    }
+
+    public Integer getDuckDbMaxLifetime() {
+        return duckDbMaxLifetime;
+    }
+
+    public Integer getMemoryLimit() {
+        return memoryLimit;
+    }
+
+    public Integer getThreads() {
+        return threads;
+    }
 }

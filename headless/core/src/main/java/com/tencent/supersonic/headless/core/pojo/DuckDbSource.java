@@ -7,7 +7,8 @@ import com.tencent.supersonic.headless.api.pojo.response.SemanticQueryResp;
 import com.tencent.supersonic.headless.core.config.ExecutorConfig;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -18,10 +19,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** duckDb connection session object */
 @Component
-@Slf4j
 public class DuckDbSource {
+    private static final Logger log = LoggerFactory.getLogger(DuckDbSource.class);
+
     protected DataSource duckDbDataSource;
 
     protected JdbcTemplate duckDbJdbcTemplate;

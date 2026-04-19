@@ -8,8 +8,8 @@ import com.tencent.supersonic.headless.api.pojo.enums.DataType;
 import com.tencent.supersonic.headless.api.pojo.response.DatabaseResp;
 import com.tencent.supersonic.headless.api.pojo.response.SemanticQueryResp;
 import com.tencent.supersonic.headless.core.pojo.JdbcDataSource;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -27,12 +27,10 @@ import java.util.*;
 
 import static com.tencent.supersonic.common.pojo.Constants.AT_SYMBOL;
 
-/** tools functions about sql query */
-@Slf4j
 @Component
 public class SqlUtils {
+    private static final Logger log = LoggerFactory.getLogger(SqlUtils.class);
 
-    @Getter
     private DatabaseResp database;
 
     @Autowired
@@ -44,10 +42,8 @@ public class SqlUtils {
     @Value("${s2.source.enable-query-log:false}")
     private boolean isQueryLogEnable;
 
-    @Getter
     private DataType dataTypeEnum;
 
-    @Getter
     private JdbcDataSourceUtils jdbcDataSourceUtils;
 
     public SqlUtils() {}
@@ -55,6 +51,18 @@ public class SqlUtils {
     public SqlUtils(DatabaseResp database) {
         this.database = database;
         this.dataTypeEnum = DataType.urlOf(database.getUrl());
+    }
+
+    public DatabaseResp getDatabase() {
+        return database;
+    }
+
+    public DataType getDataTypeEnum() {
+        return dataTypeEnum;
+    }
+
+    public JdbcDataSourceUtils getJdbcDataSourceUtils() {
+        return jdbcDataSourceUtils;
     }
 
     public SqlUtils init(DatabaseResp database) {

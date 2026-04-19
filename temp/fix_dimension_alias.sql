@@ -1,0 +1,45 @@
+-- 修复 s2_dimension 表的 alias 字段为 JSON 数组格式
+UPDATE s2_dimension SET alias = '["用户标识"]' WHERE biz_name = 'customer_id';
+UPDATE s2_dimension SET alias = '["编码"]' WHERE biz_name = 'customer_code';
+UPDATE s2_dimension SET alias = '["姓名"]' WHERE biz_name = 'customer_name';
+UPDATE s2_dimension SET alias = '["类型"]' WHERE biz_name = 'yhlx' AND model_id = 1;
+UPDATE s2_dimension SET alias = '["电话"]' WHERE biz_name = 'mob_no';
+UPDATE s2_dimension SET alias = '["入网时间"]' WHERE biz_name = 'rwrq';
+UPDATE s2_dimension SET alias = '["黑名单"]' WHERE biz_name = 'kz_hmd';
+UPDATE s2_dimension SET alias = '["可收费"]' WHERE biz_name = 'kz_sf';
+UPDATE s2_dimension SET alias = '["组织标识"]' WHERE biz_name = 'org_id';
+UPDATE s2_dimension SET alias = '["分公司"]' WHERE biz_name = 'org_level1';
+UPDATE s2_dimension SET alias = '["热力站"]' WHERE biz_name = 'org_level2';
+UPDATE s2_dimension SET alias = '["小区"]' WHERE biz_name = 'org_level3';
+UPDATE s2_dimension SET alias = '["类型"]' WHERE biz_name = 'org_type';
+UPDATE s2_dimension SET alias = '["面积标识"]' WHERE biz_name = 'area_id';
+UPDATE s2_dimension SET alias = '["类别"]' WHERE biz_name = 'mjlb';
+UPDATE s2_dimension SET alias = '["单价类别"]' WHERE biz_name = 'djlb';
+UPDATE s2_dimension SET alias = '["结算方式"]' WHERE biz_name = 'jsfs';
+UPDATE s2_dimension SET alias = '["状态"]' WHERE biz_name = 'gnzt';
+UPDATE s2_dimension SET alias = '["阀门"]' WHERE biz_name = 'fmzt';
+UPDATE s2_dimension SET alias = '["日期"]' WHERE biz_name = 'date_id';
+UPDATE s2_dimension SET alias = '["年"]' WHERE biz_name = 'year';
+UPDATE s2_dimension SET alias = '["月"]' WHERE biz_name = 'month';
+UPDATE s2_dimension SET alias = '["季度"]' WHERE biz_name = 'quarter';
+UPDATE s2_dimension SET alias = '["采暖期"]' WHERE biz_name = 'cnq';
+UPDATE s2_dimension SET alias = '["采暖年"]' WHERE biz_name = 'cnq_year';
+UPDATE s2_dimension SET alias = '["采暖月"]' WHERE biz_name = 'cnq_month';
+UPDATE s2_dimension SET alias = '["缴费季"]' WHERE biz_name = 'is_payment_season';
+UPDATE s2_dimension SET alias = '["费用类别"]' WHERE biz_name = 'fylb';
+UPDATE s2_dimension SET alias = '["用户类型"]' WHERE biz_name = 'yhlx' AND model_id = 5;
+UPDATE s2_dimension SET alias = '["分公司"]' WHERE biz_name = 'org_level1' AND model_id = 5;
+UPDATE s2_dimension SET alias = '["热力站"]' WHERE biz_name = 'org_level2' AND model_id = 5;
+UPDATE s2_dimension SET alias = '["小区"]' WHERE biz_name = 'org_level3' AND model_id = 5;
+UPDATE s2_dimension SET alias = '["单价类别"]' WHERE biz_name = 'djlb' AND model_id = 5;
+UPDATE s2_dimension SET alias = '["事件"]' WHERE biz_name = 'event';
+UPDATE s2_dimension SET alias = '["收费时间"]' WHERE biz_name = 'sfrq';
+UPDATE s2_dimension SET alias = '["支付方式"]' WHERE biz_name = 'sffs';
+UPDATE s2_dimension SET alias = '["渠道"]' WHERE biz_name = 'zfqd';
+UPDATE s2_dimension SET alias = '["发票"]' WHERE biz_name = 'fplb';
+UPDATE s2_dimension SET alias = '["月份"]' WHERE biz_name = 'stat_month';
+UPDATE s2_dimension SET alias = '["日期"]' WHERE biz_name = 'stat_date';
+UPDATE s2_dimension SET alias = '["欠费等级"]' WHERE biz_name = 'arrears_level';
+
+-- 验证更新结果
+SELECT biz_name, alias FROM s2_dimension ORDER BY model_id, id;

@@ -6,15 +6,17 @@ import com.tencent.supersonic.headless.api.pojo.response.SemanticQueryResp;
 import com.tencent.supersonic.headless.core.pojo.QueryStatement;
 import com.tencent.supersonic.headless.core.utils.ComponentFactory;
 import com.tencent.supersonic.headless.core.utils.SqlUtils;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.Objects;
 
 @Component("JdbcExecutor")
-@Slf4j
 public class JdbcExecutor implements QueryExecutor {
+    private static final Logger log = LoggerFactory.getLogger(JdbcExecutor.class);
+
     @Override
     public boolean accept(QueryStatement queryStatement) {
         return true;
@@ -22,7 +24,6 @@ public class JdbcExecutor implements QueryExecutor {
 
     @Override
     public SemanticQueryResp execute(QueryStatement queryStatement) {
-        // accelerate query if possible
         for (QueryAccelerator queryAccelerator : ComponentFactory.getQueryAccelerators()) {
             if (queryAccelerator.check(queryStatement)) {
                 SemanticQueryResp semanticQueryResp = queryAccelerator.query(queryStatement);

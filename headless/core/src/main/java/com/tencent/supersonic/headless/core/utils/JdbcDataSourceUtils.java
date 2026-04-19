@@ -7,8 +7,8 @@ import com.tencent.supersonic.common.util.MD5Util;
 import com.tencent.supersonic.headless.api.pojo.enums.DataType;
 import com.tencent.supersonic.headless.api.pojo.response.DatabaseResp;
 import com.tencent.supersonic.headless.core.pojo.JdbcDataSource;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -20,16 +20,18 @@ import java.util.regex.Matcher;
 
 import static com.tencent.supersonic.common.pojo.Constants.*;
 
-/** tools functions about jdbc */
-@Slf4j
 public class JdbcDataSourceUtils {
+    private static final Logger log = LoggerFactory.getLogger(JdbcDataSourceUtils.class);
 
-    @Getter
     private static Set releaseSourceSet = new HashSet();
     private JdbcDataSource jdbcDataSource;
 
     public JdbcDataSourceUtils(JdbcDataSource jdbcDataSource) {
         this.jdbcDataSource = jdbcDataSource;
+    }
+
+    public static Set getReleaseSourceSet() {
+        return releaseSourceSet;
     }
 
     public static boolean testDatabase(DatabaseResp database) {
@@ -40,7 +42,6 @@ public class JdbcDataSourceUtils {
             log.error(e.toString(), e);
             return false;
         }
-        // presto/trino ssl=false connection need password
         if (database.getUrl().startsWith("jdbc:presto")
                 || database.getUrl().startsWith("jdbc:trino")) {
             if (database.getUrl().toLowerCase().contains("ssl=false")) {

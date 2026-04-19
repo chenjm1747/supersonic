@@ -19,22 +19,19 @@ import com.tencent.supersonic.headless.core.pojo.OntologyQuery;
 import com.tencent.supersonic.headless.core.pojo.QueryStatement;
 import com.tencent.supersonic.headless.core.pojo.SqlQuery;
 import com.tencent.supersonic.headless.core.utils.SqlGenerateUtils;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/**
- * This parser rewrites S2SQL including conversion from metric/dimension name to bizName and build
- * ontology query in preparation for generation of physical SQL.
- */
 @Component("SqlQueryParser")
-@Slf4j
 public class SqlQueryParser implements QueryParser {
+    private static final Logger log = LoggerFactory.getLogger(SqlQueryParser.class);
 
     @Override
     public boolean accept(QueryStatement queryStatement) {
@@ -43,7 +40,6 @@ public class SqlQueryParser implements QueryParser {
 
     @Override
     public void parse(QueryStatement queryStatement) throws Exception {
-        // build ontologyQuery
         SqlQuery sqlQuery = queryStatement.getSqlQuery();
         List<String> queryFields = SqlSelectHelper.getAllSelectFields(sqlQuery.getSql());
         Set<String> queryAliases = SqlSelectHelper.getAliasFields(sqlQuery.getSql());
@@ -59,7 +55,6 @@ public class SqlQueryParser implements QueryParser {
         ontologyQuery.getDimensions().forEach(d -> {
             ontologyMetricsDimensionsAndBizName.add(Pair.of(d.getName(), d.getBizName()));
         });
-        // check if there are fields not matched with any metric or dimension
         if (!allFieldMatched(queryFieldsSet, ontologyMetricsDimensionsAndBizName)) {
             List<String> semanticFields = Lists.newArrayList();
             ontologyQuery.getMetrics().forEach(m -> semanticFields.add(m.getName()));
@@ -77,11 +72,9 @@ public class SqlQueryParser implements QueryParser {
         ontologyQuery.setAggOption(sqlQueryAggOption);
 
         convertNameToBizName(queryStatement);
-        // Solve the problem of SQL execution error when alias is Chinese
         aliasesWithBackticks(queryStatement);
         rewriteOrderBy(queryStatement);
 
-        // fill sqlQuery
         String tableName = SqlSelectHelper.getTableName(sqlQuery.getSql());
         if (StringUtils.isEmpty(tableName)) {
             return;
@@ -126,8 +119,6 @@ public class SqlQueryParser implements QueryParser {
             return AggOption.NATIVE;
         }
 
-        // if there is no group by in S2SQL,set MetricTable's aggOption to "NATIVE"
-        // if there is count() in S2SQL,set MetricTable's aggOption to "NATIVE"
         if (!SqlSelectFunctionHelper.hasAggregateFunction(sql)
                 || SqlSelectFunctionHelper.hasFunction(sql, "count")
                 || SqlSelectFunctionHelper.hasFunction(sql, "count_distinct")) {
@@ -149,7 +140,6 @@ public class SqlQueryParser implements QueryParser {
     }
 
     private Map<String, String> getNameToBizNameMap(OntologyQuery query) {
-        // support fieldName and field alias to bizName
         Map<String, String> dimensionResults = query.getDimensions().stream().flatMap(
                 entry -> getPairStream(entry.getAlias(), entry.getName(), entry.getBizName()))
                 .collect(Collectors.toMap(Pair::getLeft, Pair::getRight, (k1, k2) -> k1));
@@ -191,7 +181,6 @@ public class SqlQueryParser implements QueryParser {
     }
 
     private void rewriteOrderBy(QueryStatement queryStatement) {
-        // replace order by field with the select sequence number
         String sql = queryStatement.getSqlQuery().getSql();
         String newSql = SqlReplaceHelper.replaceAggAliasOrderbyField(sql);
         log.debug("replaceOrderAggSameAlias {} -> {}", sql, newSql);
@@ -202,7 +191,6 @@ public class SqlQueryParser implements QueryParser {
         OntologyQuery ontologyQuery = new OntologyQuery();
         Set<String> fields = Sets.newHashSet(queryFields);
 
-        // find belonging model for every querying metrics
         ontology.getMetricMap().entrySet().forEach(entry -> {
             String modelName = entry.getKey();
             entry.getValue().forEach(m -> {
@@ -217,7 +205,6 @@ public class SqlQueryParser implements QueryParser {
             });
         });
 
-        // first try to find all querying dimensions in the models with querying metrics.
         ontology.getDimensionMap().entrySet().stream()
                 .filter(entry -> ontologyQuery.getMetricMap().containsKey(entry.getKey()))
                 .forEach(entry -> {
@@ -234,8 +221,6 @@ public class SqlQueryParser implements QueryParser {
                     });
                 });
 
-        // second, try to find a model that has all the remaining fields, such that no further join
-        // is needed.
         if (!fields.isEmpty()) {
             Map<String, Set<DimSchemaResp>> model2dims = new HashMap<>();
             ontology.getDimensionMap().entrySet().forEach(entry -> {
@@ -257,8 +242,6 @@ public class SqlQueryParser implements QueryParser {
             }
         }
 
-        // finally if there are still fields not found belonging models, try to find in the models
-        // iteratively
         if (!fields.isEmpty()) {
             ontology.getDimensionMap().entrySet().forEach(entry -> {
                 String modelName = entry.getKey();

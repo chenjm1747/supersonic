@@ -22,11 +22,16 @@ public class OllamaModelFactory implements ModelFactory, InitializingBean {
 
     @Override
     public ChatLanguageModel createChatModel(ChatModelConfig modelConfig) {
-        return OllamaChatModel.builder().baseUrl(modelConfig.getBaseUrl())
-                .modelName(modelConfig.getModelName()).temperature(modelConfig.getTemperature())
+        OllamaChatModel.OllamaChatModelBuilder builder = OllamaChatModel.builder()
+                .baseUrl(modelConfig.getBaseUrl()).modelName(modelConfig.getModelName())
+                .temperature(modelConfig.getTemperature())
                 .timeout(Duration.ofSeconds(modelConfig.getTimeOut())).topP(modelConfig.getTopP())
                 .maxRetries(modelConfig.getMaxRetries()).logRequests(modelConfig.getLogRequests())
-                .logResponses(modelConfig.getLogResponses()).build();
+                .logResponses(modelConfig.getLogResponses());
+        if (modelConfig.getJsonFormat() != null && modelConfig.getJsonFormat()) {
+            builder.format("json");
+        }
+        return builder.build();
     }
 
     @Override
