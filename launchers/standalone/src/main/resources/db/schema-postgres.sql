@@ -501,3 +501,248 @@ CREATE TABLE IF NOT EXISTS s2_user (
     last_login timestamp NULL,
     UNIQUE(name)
 );
+
+-- Text-to-SQL Schema Knowledge 表 (需要 pgvector 扩展支持)
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS s2_schema_knowledge (
+    id BIGSERIAL PRIMARY KEY,
+    table_name VARCHAR(64) NOT NULL,
+    table_comment VARCHAR(255),
+    column_name VARCHAR(64),
+    column_comment VARCHAR(255),
+    column_type VARCHAR(32),
+    is_primary_key BOOLEAN DEFAULT FALSE,
+    is_foreign_key BOOLEAN DEFAULT FALSE,
+    fk_reference VARCHAR(128),
+    knowledge_text TEXT NOT NULL,
+    embedding VECTOR(1024),
+    created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_schema_embedding ON s2_schema_knowledge USING ivfflat (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS idx_table_name ON s2_schema_knowledge(table_name);
+
+-- ============================================
+-- LLM-SQL-Wiki 模块表结构
+-- 创建时间: 2026-04-17
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS s2_wiki_entity (
+    id BIGSERIAL PRIMARY KEY,
+    entity_id VARCHAR(128) NOT NULL UNIQUE,
+    entity_type VARCHAR(32) NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    display_name VARCHAR(128),
+    description TEXT,
+    properties JSONB,
+    summary TEXT,
+    tags TEXT[],
+    version VARCHAR(32),
+    parent_entity_id VARCHAR(128),
+    topic_id VARCHAR(64),
+    status VARCHAR(16) DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_type ON s2_wiki_entity(entity_type);
+CREATE INDEX IF NOT EXISTS idx_parent ON s2_wiki_entity(parent_entity_id);
+CREATE INDEX IF NOT EXISTS idx_topic ON s2_wiki_entity(topic_id);
+CREATE INDEX IF NOT EXISTS idx_entity_name ON s2_wiki_entity(name);
+CREATE INDEX IF NOT EXISTS idx_entity_status ON s2_wiki_entity(status);
+
+CREATE TABLE IF NOT EXISTS s2_wiki_entity_link (
+    id BIGSERIAL PRIMARY KEY,
+    source_entity_id VARCHAR(128) NOT NULL,
+    target_entity_id VARCHAR(128) NOT NULL,
+    link_type VARCHAR(32) NOT NULL,
+    relation VARCHAR(64),
+    description TEXT,
+    bidirectional BOOLEAN DEFAULT FALSE,
+    weight DECIMAL(3,2) DEFAULT 1.0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_link_source FOREIGN KEY (source_entity_id) REFERENCES s2_wiki_entity(entity_id) ON DELETE CASCADE,
+    CONSTRAINT fk_link_target FOREIGN KEY (target_entity_id) REFERENCES s2_wiki_entity(entity_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_link_source ON s2_wiki_entity_link(source_entity_id);
+CREATE INDEX IF NOT EXISTS idx_link_target ON s2_wiki_entity_link(target_entity_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_link_unique ON s2_wiki_entity_link(source_entity_id, target_entity_id, link_type);
+
+-- Entity-Topic association table (many-to-many)
+CREATE TABLE IF NOT EXISTS s2_wiki_entity_topic (
+    id BIGSERIAL PRIMARY KEY,
+    entity_id VARCHAR(64) NOT NULL,
+    topic_id VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(entity_id, topic_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_topic_entity ON s2_wiki_entity_topic(entity_id);
+CREATE INDEX IF NOT EXISTS idx_entity_topic_topic ON s2_wiki_entity_topic(topic_id);
+
+CREATE TABLE IF NOT EXISTS s2_wiki_knowledge_card (
+    id BIGSERIAL PRIMARY KEY,
+    card_id VARCHAR(128) NOT NULL UNIQUE,
+    entity_id VARCHAR(128) NOT NULL,
+    card_type VARCHAR(32) NOT NULL,
+    title VARCHAR(256),
+    content TEXT NOT NULL,
+    extracted_from TEXT[],
+    confidence DECIMAL(5,4) DEFAULT 1.0,
+    status VARCHAR(16) DEFAULT 'ACTIVE',
+    tags TEXT[],
+    embedding VECTOR(1024),
+    version VARCHAR(32),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_card_entity FOREIGN KEY (entity_id) REFERENCES s2_wiki_entity(entity_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_card_entity ON s2_wiki_knowledge_card(entity_id);
+CREATE INDEX IF NOT EXISTS idx_card_type ON s2_wiki_knowledge_card(card_type);
+CREATE INDEX IF NOT EXISTS idx_card_status ON s2_wiki_knowledge_card(status);
+CREATE INDEX IF NOT EXISTS idx_card_embedding ON s2_wiki_knowledge_card USING ivfflat (embedding vector_cosine_ops);
+
+CREATE TABLE IF NOT EXISTS s2_wiki_topic_summary (
+    id BIGSERIAL PRIMARY KEY,
+    topic_id VARCHAR(64) NOT NULL UNIQUE,
+    topic_name VARCHAR(128) NOT NULL,
+    summary TEXT NOT NULL,
+    member_entities TEXT[],
+    relationships TEXT[],
+    metrics JSONB,
+    summary_version INT DEFAULT 1,
+    llm_model VARCHAR(64),
+    generated_at TIMESTAMP,
+    status VARCHAR(16) DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_topic_name ON s2_wiki_topic_summary(topic_name);
+CREATE INDEX IF NOT EXISTS idx_topic_status ON s2_wiki_topic_summary(status);
+
+CREATE TABLE IF NOT EXISTS s2_wiki_contradiction (
+    id BIGSERIAL PRIMARY KEY,
+    contradiction_id VARCHAR(128) NOT NULL UNIQUE,
+    entity_id VARCHAR(128) NOT NULL,
+    old_knowledge_card_id VARCHAR(128),
+    conflict_type VARCHAR(32) NOT NULL,
+    old_content TEXT,
+    new_evidence TEXT,
+    evidence_source VARCHAR(256),
+    impact TEXT,
+    resolution VARCHAR(16) DEFAULT 'PENDING',
+    resolved_at TIMESTAMP,
+    resolved_by VARCHAR(64),
+    resolution_notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_contradiction_entity ON s2_wiki_contradiction(entity_id);
+CREATE INDEX IF NOT EXISTS idx_contradiction_status ON s2_wiki_contradiction(resolution);
+CREATE INDEX IF NOT EXISTS idx_contradiction_type ON s2_wiki_contradiction(conflict_type);
+
+CREATE TABLE IF NOT EXISTS s2_wiki_evidence (
+    id BIGSERIAL PRIMARY KEY,
+    evidence_id VARCHAR(128) NOT NULL UNIQUE,
+    contradiction_id VARCHAR(128),
+    source_entity_id VARCHAR(128),
+    evidence_type VARCHAR(16) NOT NULL,
+    content TEXT NOT NULL,
+    source VARCHAR(256),
+    confidence DECIMAL(5,4),
+    impact VARCHAR(32),
+    resolution VARCHAR(32),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_evidence_contradiction FOREIGN KEY (contradiction_id) REFERENCES s2_wiki_contradiction(contradiction_id) ON DELETE CASCADE,
+    CONSTRAINT fk_evidence_entity FOREIGN KEY (source_entity_id) REFERENCES s2_wiki_entity(entity_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_contradiction ON s2_wiki_evidence(contradiction_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_type ON s2_wiki_evidence(evidence_type);
+
+-- ============================================
+-- 多轮对话上下文表
+-- 创建时间: 2026-04-18
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS s2_wiki_conversation_context (
+    id BIGSERIAL PRIMARY KEY,
+    conversation_id VARCHAR(64) NOT NULL,
+    user_id VARCHAR(64) NOT NULL,
+    data_set_id BIGINT NOT NULL,
+    context_type VARCHAR(32) NOT NULL COMMENT '上下文类型: TIME_RANGE, ENTITY, FILTER, INTENT, SQL_RESULT',
+    context_key VARCHAR(128) NOT NULL COMMENT '上下文键',
+    context_value TEXT NOT NULL COMMENT '上下文值(JSON格式)',
+    query_text TEXT COMMENT '产生此上下文的原始问题',
+    generated_sql TEXT COMMENT '生成的SQL',
+    referenced_entities TEXT[] COMMENT '引用的实体列表',
+    referenced_cards TEXT[] COMMENT '引用的知识卡片列表',
+    round_number INT DEFAULT 1 COMMENT '对话轮次',
+    status VARCHAR(16) DEFAULT 'ACTIVE' COMMENT '状态: ACTIVE, EXPIRED, ARCHIVED',
+    expires_at TIMESTAMP COMMENT '过期时间',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_conversation_id ON s2_wiki_conversation_context(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_conv_user_id ON s2_wiki_conversation_context(user_id);
+CREATE INDEX IF NOT EXISTS idx_conv_context_type ON s2_wiki_conversation_context(context_type);
+CREATE INDEX IF NOT EXISTS idx_conv_round_number ON s2_wiki_conversation_context(round_number);
+CREATE INDEX IF NOT EXISTS idx_conv_status ON s2_wiki_conversation_context(status);
+CREATE INDEX IF NOT EXISTS idx_conv_expires_at ON s2_wiki_conversation_context(expires_at);
+CREATE INDEX IF NOT EXISTS idx_conv_created_at ON s2_wiki_conversation_context(created_at);
+
+-- ============================================
+-- LLM-SQL-Wiki 健康巡检相关表
+-- 创建时间: 2026-04-19
+-- ============================================
+
+-- 健康巡检报告表
+CREATE TABLE IF NOT EXISTS s2_wiki_health_report (
+    id BIGSERIAL PRIMARY KEY,
+    report_id VARCHAR(128) NOT NULL UNIQUE,
+    report_type VARCHAR(16) NOT NULL,
+    checked_at TIMESTAMP NOT NULL,
+    contradictions_found INT DEFAULT 0,
+    outdated_cards INT DEFAULT 0,
+    orphan_entities INT DEFAULT 0,
+    missing_refs INT DEFAULT 0,
+    status VARCHAR(32) DEFAULT 'PENDING_PROCESSED',
+    report_content JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 知识卡片使用历史表
+CREATE TABLE IF NOT EXISTS s2_wiki_card_usage_log (
+    id BIGSERIAL PRIMARY KEY,
+    card_id VARCHAR(128) NOT NULL,
+    sql TEXT NOT NULL,
+    result VARCHAR(16) NOT NULL,
+    error_msg TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 研究方向表
+CREATE TABLE IF NOT EXISTS s2_wiki_research_topic (
+    id BIGSERIAL PRIMARY KEY,
+    topic_id VARCHAR(128) NOT NULL UNIQUE,
+    topic VARCHAR(512) NOT NULL,
+    priority VARCHAR(16) DEFAULT 'MEDIUM',
+    reason TEXT,
+    status VARCHAR(32) DEFAULT 'PENDING',
+    related_entity_ids TEXT[],
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    confirmed_at TIMESTAMP,
+    confirmed_by VARCHAR(64)
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_type ON s2_wiki_health_report(report_type);
+CREATE INDEX IF NOT EXISTS idx_report_status ON s2_wiki_health_report(status);
+CREATE INDEX IF NOT EXISTS idx_card_usage_card ON s2_wiki_card_usage_log(card_id);
+CREATE INDEX IF NOT EXISTS idx_topic_status ON s2_wiki_research_topic(status);
+CREATE INDEX IF NOT EXISTS idx_topic_priority ON s2_wiki_research_topic(priority);
