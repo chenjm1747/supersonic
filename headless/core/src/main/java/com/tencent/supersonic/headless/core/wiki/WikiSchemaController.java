@@ -125,12 +125,13 @@ public class WikiSchemaController {
 
     @PostMapping("/import-from-datasource/{dataSourceId}")
     @Transactional
-    public BaseResp<ImportResult> importFromDataSource(@PathVariable Long dataSourceId, @RequestBody List<TableSelection> selections) {
+    public BaseResp<com.tencent.supersonic.headless.core.wiki.dto.ImportResult> importFromDataSource(@PathVariable Long dataSourceId, @RequestBody List<TableSelection> selections) {
         try {
             // 解析数据源 schema
             List<TableSchema> schemas = dataSourceService.parseSchemaFromSource(dataSourceId);
 
-            ImportResult result = new ImportResult();
+            com.tencent.supersonic.headless.core.wiki.dto.ImportResult result =
+                    new com.tencent.supersonic.headless.core.wiki.dto.ImportResult();
             int successCount = 0;
             int skipCount = 0;
             int failCount = 0;

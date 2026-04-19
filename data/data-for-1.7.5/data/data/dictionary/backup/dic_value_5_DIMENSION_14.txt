@@ -1,0 +1,10 @@
+H100 _5_14 1
+kindle _5_14 1
+Android _5_14 1
+Windows _5_14 1
+A100 _5_14 1
+aws _5_14 1
+Model#3 _5_14 1
+Google _5_14 1
+Model#Y _5_14 1
+Office _5_14 1
