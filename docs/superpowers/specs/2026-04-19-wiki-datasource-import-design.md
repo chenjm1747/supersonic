@@ -57,7 +57,7 @@ GET /api/wiki/schema/import-preview/{dataSourceId}
             "dataType": "DECIMAL(10,3)"
           }
         ],
-        "conflictStatus": "NEW" | "EXISTS" | "UPDATED"
+        "conflictStatus": "NEW" | "EXISTS"
       }
     ],
     "totalCount": 5,
@@ -194,4 +194,3 @@ public ImportResult importFromDataSource(Long dataSourceId, List<TableSelection>
 - 使用 `WikiDataSourceService.parseSchemaFromSource()` 读取 schema
 - 使用 `WikiEntityService` 创建 Entity
 - 支持 MySQL 和 PostgreSQL 两种数据源类型
-- `parseSchemaFromSource` 已在 `WikiController` 中暴露为 `/api/wiki/datasources/{id}/parse-schema`
