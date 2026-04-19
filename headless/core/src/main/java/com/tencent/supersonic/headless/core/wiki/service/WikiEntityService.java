@@ -2,6 +2,7 @@ package com.tencent.supersonic.headless.core.wiki.service;
 
 import javax.sql.DataSource;
 
+import com.tencent.supersonic.headless.core.text2sql.dto.TableSchema;
 import com.tencent.supersonic.headless.core.wiki.dto.WikiEntity;
 import com.tencent.supersonic.headless.core.wiki.dto.WikiKnowledgeCard;
 import com.tencent.supersonic.headless.core.wiki.dto.WikiLink;
@@ -135,9 +136,10 @@ public class WikiEntityService {
     public List<WikiEntity> getEntitiesByType(String entityType) {
         List<WikiEntity> entities =
                 jdbcTemplate.query(SELECT_BY_TYPE_SQL, new WikiEntityRowMapper(), entityType);
+        // Batch fetch all entity-topic associations to avoid N+1 queries
+        Map<String, List<String>> topicMap = getAllEntityTopicMappings();
         for (WikiEntity entity : entities) {
-            List<String> topicIds = getTopicIdsByEntityId(entity.getEntityId());
-            entity.setTopicIds(topicIds);
+            entity.setTopicIds(topicMap.getOrDefault(entity.getEntityId(), new ArrayList<>()));
         }
         return entities;
     }
@@ -145,9 +147,10 @@ public class WikiEntityService {
     public List<WikiEntity> getEntitiesByTopic(String topicId) {
         List<WikiEntity> entities =
                 jdbcTemplate.query(SELECT_BY_TOPIC_SQL, new WikiEntityRowMapper(), topicId);
+        // Batch fetch all entity-topic associations to avoid N+1 queries
+        Map<String, List<String>> topicMap = getAllEntityTopicMappings();
         for (WikiEntity entity : entities) {
-            List<String> topicIds = getTopicIdsByEntityId(entity.getEntityId());
-            entity.setTopicIds(topicIds);
+            entity.setTopicIds(topicMap.getOrDefault(entity.getEntityId(), new ArrayList<>()));
         }
         return entities;
     }
@@ -155,9 +158,10 @@ public class WikiEntityService {
     public List<WikiEntity> getChildEntities(String parentEntityId) {
         List<WikiEntity> entities =
                 jdbcTemplate.query(SELECT_BY_PARENT_SQL, new WikiEntityRowMapper(), parentEntityId);
+        // Batch fetch all entity-topic associations to avoid N+1 queries
+        Map<String, List<String>> topicMap = getAllEntityTopicMappings();
         for (WikiEntity entity : entities) {
-            List<String> topicIds = getTopicIdsByEntityId(entity.getEntityId());
-            entity.setTopicIds(topicIds);
+            entity.setTopicIds(topicMap.getOrDefault(entity.getEntityId(), new ArrayList<>()));
         }
         return entities;
     }
@@ -165,12 +169,24 @@ public class WikiEntityService {
     public List<WikiEntity> getAllActiveEntities() {
         List<WikiEntity> entities =
                 jdbcTemplate.query(SELECT_ALL_ACTIVE_SQL, new WikiEntityRowMapper());
-        // Fill topicIds for each entity
+        // Batch fetch all entity-topic associations to avoid N+1 queries
+        Map<String, List<String>> topicMap = getAllEntityTopicMappings();
         for (WikiEntity entity : entities) {
-            List<String> topicIds = getTopicIdsByEntityId(entity.getEntityId());
-            entity.setTopicIds(topicIds);
+            entity.setTopicIds(topicMap.getOrDefault(entity.getEntityId(), new ArrayList<>()));
         }
         return entities;
+    }
+
+    private Map<String, List<String>> getAllEntityTopicMappings() {
+        String sql = "SELECT entity_id, topic_id FROM s2_wiki_entity_topic";
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
+        Map<String, List<String>> topicMap = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            String entityId = (String) row.get("entity_id");
+            String topicId = (String) row.get("topic_id");
+            topicMap.computeIfAbsent(entityId, k -> new ArrayList<>()).add(topicId);
+        }
+        return topicMap;
     }
 
     public List<WikiEntity> searchEntities(String queryText) {
@@ -297,6 +313,83 @@ public class WikiEntityService {
         }
         sb.append("}");
         return sb.toString();
+    }
+
+    /**
+     * 检测表名列表中哪些已存在
+     * @param tableNames 要检测的表名列表
+     * @return Map<tableName, "NEW"|"EXISTS">
+     */
+    public Map<String, String> detectConflicts(List<String> tableNames) {
+        Map<String, String> result = new HashMap<>();
+        if (tableNames == null || tableNames.isEmpty()) {
+            return result;
+        }
+        String sql = "SELECT name FROM s2_wiki_entity WHERE entity_type = 'TABLE' AND status = 'ACTIVE' AND name = ?";
+        for (String tableName : tableNames) {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, tableName);
+            result.put(tableName, rows.isEmpty() ? "NEW" : "EXISTS");
+        }
+        return result;
+    }
+
+    /**
+     * 导入单个表的结构到 Wiki Entity
+     */
+    public void importTableSchema(TableSchema schema, String topicId) {
+        String entityId = "table:" + schema.getTableName();
+
+        // 检查是否已存在
+        WikiEntity existing = getEntityById(entityId);
+        if (existing != null) {
+            // 更新
+            existing.setDisplayName(schema.getTableComment());
+            existing.setDescription(schema.getTableComment());
+            existing.setTopicId(topicId);
+            updateEntity(existing);
+        } else {
+            // 创建
+            WikiEntity entity = new WikiEntity();
+            entity.setEntityId(entityId);
+            entity.setEntityType("TABLE");
+            entity.setName(schema.getTableName());
+            entity.setDisplayName(schema.getTableComment());
+            entity.setDescription(schema.getTableComment());
+            entity.setTopicId(topicId);
+            entity.setStatus("ACTIVE");
+            createEntity(entity);
+        }
+
+        // 处理字段 (COLUMN)
+        for (com.tencent.supersonic.headless.core.text2sql.dto.ColumnSchema col : schema.getColumns()) {
+            importColumnSchema(entityId, col);
+        }
+    }
+
+    private void importColumnSchema(String parentEntityId, com.tencent.supersonic.headless.core.text2sql.dto.ColumnSchema col) {
+        String columnEntityId = parentEntityId + ":column:" + col.getColumnName();
+
+        WikiEntity existing = getEntityById(columnEntityId);
+        Map<String, Object> props = new HashMap<>();
+        props.put("dataType", col.getColumnType());
+
+        if (existing != null) {
+            existing.setDisplayName(col.getColumnComment());
+            existing.setDescription(col.getColumnComment());
+            existing.setProperties(props);
+            updateEntity(existing);
+        } else {
+            WikiEntity columnEntity = new WikiEntity();
+            columnEntity.setEntityId(columnEntityId);
+            columnEntity.setEntityType("COLUMN");
+            columnEntity.setName(col.getColumnName());
+            columnEntity.setDisplayName(col.getColumnComment());
+            columnEntity.setDescription(col.getColumnComment());
+            columnEntity.setProperties(props);
+            columnEntity.setParentEntityId(parentEntityId);
+            columnEntity.setStatus("ACTIVE");
+            createEntity(columnEntity);
+        }
     }
 
     private static class WikiEntityRowMapper implements RowMapper<WikiEntity> {
