@@ -9,8 +9,7 @@ import SummarySection from './components/SummarySection';
 import HealthSection from './components/HealthSection';
 import SchemaImportSection from './components/SchemaImportSection';
 import {
-  getGraphNodes,
-  getGraphEdges,
+  getLazyNodes,
   getEntities,
   getPendingContradictions,
   GraphNode,
@@ -39,14 +38,14 @@ const Wiki: React.FC = () => {
   const fetchGraphData = async () => {
     setGraphLoading(true);
     try {
-      const [nodesResp, edgesResp] = await Promise.all([getGraphNodes(), getGraphEdges()]);
+      // 初始只加载 TOPIC 类型节点
+      const [nodesResp] = await Promise.all([
+        getLazyNodes('TOPIC'),
+      ]);
 
       if (nodesResp.success && nodesResp.data) {
         setGraphNodes(nodesResp.data);
-      }
-
-      if (edgesResp.success && edgesResp.data) {
-        setGraphEdges(edgesResp.data);
+        setGraphEdges([]);  // 边按需加载
       }
     } catch (error) {
       console.error('Failed to fetch graph data:', error);
