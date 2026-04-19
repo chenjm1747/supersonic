@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Space, Drawer, Descriptions, Tag, Spin, Card, Row, Col, Typography, Segmented } from 'antd';
 import { ReloadOutlined, TableOutlined, ApartmentOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import G6 from '@antv/g6';
@@ -40,6 +40,7 @@ const EntityGraph: React.FC<EntityGraphProps> = ({
   const [loadedChildNodes, setLoadedChildNodes] = useState<Map<string, GraphNode[]>>(new Map());
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<any>(null);
+  const expandOperationIdRef = useRef<number>(0);
 
   // 只获取 TOPIC 和 TABLE 节点
   const topicNodes = nodes.filter((n) => n.type === 'TOPIC' && n.status === 'ACTIVE');
@@ -478,89 +479,110 @@ const EntityGraph: React.FC<EntityGraphProps> = ({
     }
   };
 
-  const handleNodeClick = (node: GraphNode) => {
-    // For TOPIC and TABLE nodes, trigger expand/collapse directly
-    if (node.type === 'TOPIC' || node.type === 'TABLE') {
-      expandNode(node);
-    } else {
-      // For other nodes (like COLUMN), show details in drawer
-      onNodeClick(node);
-      setShowDrawer(true);
-      fetchNeighborData(node.id);
-    }
-  };
-
-  const expandNode = async (node: GraphNode) => {
-    const isExpanded = expandedNodeIds.has(node.id);
-
-    if (isExpanded) {
-      // Collapse: remove child nodes from expanded set
-      const newExpandedIds = new Set(expandedNodeIds);
-      newExpandedIds.delete(node.id);
-      setExpandedNodeIds(newExpandedIds);
-
-      // Remove child nodes from the displayed graph via callback
-      const childNodes = loadedChildNodes.get(node.id) || [];
-      if (onNodesChange && childNodes.length > 0) {
-        const currentNodes = nodes;
-        const updatedNodes = currentNodes.filter(
-          (n) => !childNodes.some((child) => child.id === n.id)
-        );
-        onNodesChange(updatedNodes);
+  const handleNodeClick = useCallback(
+    (node: GraphNode) => {
+      // For TOPIC and TABLE nodes, trigger expand/collapse directly
+      if (node.type === 'TOPIC' || node.type === 'TABLE') {
+        expandNode(node);
+      } else {
+        // For other nodes (like COLUMN), show details in drawer
+        onNodeClick(node);
+        setShowDrawer(true);
+        fetchNeighborData(node.id);
       }
-      if (onEdgesChange) {
-        const childNodeIds = childNodes.map((n) => n.id);
-        const updatedEdges = edges.filter(
-          (e) => !(childNodeIds.includes(e.source) || childNodeIds.includes(e.target))
-        );
-        onEdgesChange(updatedEdges);
-      }
-    } else {
-      // Expand: load child nodes
-      let childType: string | undefined;
-      if (node.type === 'TOPIC') {
-        childType = 'TABLE';
-      } else if (node.type === 'TABLE') {
-        childType = 'COLUMN';
-      }
+    },
+    [expandNode]
+  );
 
-      if (!childType) {
-        return; // Cannot expand COLUMN nodes
-      }
+  const expandNode = useCallback(
+    async (node: GraphNode) => {
+      const isExpanded = expandedNodeIds.has(node.id);
 
-      try {
-        // Load child nodes
-        const resp = await getLazyNodes(childType, node.id);
-        if (resp.success && resp.data && resp.data.length > 0) {
-          const childNodes = resp.data;
+      if (isExpanded) {
+        // Collapse: remove child nodes from expanded set
+        const newExpandedIds = new Set(expandedNodeIds);
+        newExpandedIds.delete(node.id);
+        setExpandedNodeIds(newExpandedIds);
 
-          // Store child nodes for this parent
-          const newLoadedChildren = new Map(loadedChildNodes);
-          newLoadedChildren.set(node.id, childNodes);
-          setLoadedChildNodes(newLoadedChildren);
-
-          // Load edges for these new nodes
-          const edgeResp = await getLazyEdges(childNodes.map((n) => n.id));
-          const newEdges = edgeResp.success && edgeResp.data ? edgeResp.data : [];
-
-          // Add to expanded set
-          const newExpandedIds = new Set(expandedNodeIds);
-          newExpandedIds.add(node.id);
-          setExpandedNodeIds(newExpandedIds);
-
-          // Update parent state via callbacks
-          if (onNodesChange) {
-            onNodesChange([...nodes, ...childNodes]);
-          }
-          if (onEdgesChange) {
-            onEdgesChange([...edges, ...newEdges]);
-          }
+        // Remove child nodes from the displayed graph via callback
+        const childNodes = loadedChildNodes.get(node.id) || [];
+        if (onNodesChange && childNodes.length > 0) {
+          const currentNodes = nodes;
+          const updatedNodes = currentNodes.filter(
+            (n) => !childNodes.some((child) => child.id === n.id)
+          );
+          onNodesChange(updatedNodes);
         }
-      } catch (error) {
-        console.error('Failed to expand node:', error);
+        if (onEdgesChange) {
+          const childNodeIds = childNodes.map((n) => n.id);
+          const updatedEdges = edges.filter(
+            (e) => !(childNodeIds.includes(e.source) || childNodeIds.includes(e.target))
+          );
+          onEdgesChange(updatedEdges);
+        }
+      } else {
+        // Expand: load child nodes
+        let childType: string | undefined;
+        if (node.type === 'TOPIC') {
+          childType = 'TABLE';
+        } else if (node.type === 'TABLE') {
+          childType = 'COLUMN';
+        }
+
+        if (!childType) {
+          return; // Cannot expand COLUMN nodes
+        }
+
+        // Increment operation ID to track this operation
+        const currentOperationId = ++expandOperationIdRef.current;
+
+        try {
+          // Load child nodes
+          const resp = await getLazyNodes(childType, node.id);
+
+          // Check if this operation is still valid (not superseded by a newer one)
+          if (currentOperationId !== expandOperationIdRef.current) {
+            return;
+          }
+
+          if (resp.success && resp.data && resp.data.length > 0) {
+            const childNodes = resp.data;
+
+            // Store child nodes for this parent
+            const newLoadedChildren = new Map(loadedChildNodes);
+            newLoadedChildren.set(node.id, childNodes);
+            setLoadedChildNodes(newLoadedChildren);
+
+            // Load edges for these new nodes
+            const edgeResp = await getLazyEdges(childNodes.map((n) => n.id));
+
+            // Check again if operation is still valid
+            if (currentOperationId !== expandOperationIdRef.current) {
+              return;
+            }
+
+            const newEdges = edgeResp.success && edgeResp.data ? edgeResp.data : [];
+
+            // Add to expanded set
+            const newExpandedIds = new Set(expandedNodeIds);
+            newExpandedIds.add(node.id);
+            setExpandedNodeIds(newExpandedIds);
+
+            // Update parent state via callbacks
+            if (onNodesChange) {
+              onNodesChange([...nodes, ...childNodes]);
+            }
+            if (onEdgesChange) {
+              onEdgesChange([...edges, ...newEdges]);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to expand node:', error);
+        }
       }
-    }
-  };
+    },
+    [nodes, edges, expandedNodeIds, loadedChildNodes, onNodesChange, onEdgesChange]
+  );
 
   const getTypeTagColor = (type: string) => {
     switch (type) {
