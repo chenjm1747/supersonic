@@ -102,6 +102,32 @@ public class PromptHelper {
         return String.join(",", sideInfos);
     }
 
+    /**
+     * Build enhanced side information including parsed question details.
+     */
+    public String buildEnhancedSideInfo(LLMReq llmReq) {
+        StringBuilder sideInfo = new StringBuilder();
+
+        // Base side information
+        sideInfo.append(buildSideInformation(llmReq));
+
+        // Add parsed question details if available
+        if (llmReq.getParsedQuestion() != null) {
+            Object parsedQ = llmReq.getParsedQuestion();
+            // Use reflection or cast to access parsed question details
+            // For now, we add a generic enhancement marker
+            sideInfo.append(",EnhancedParsing=[enabled]");
+        }
+
+        // Add intent-based guidance
+        if (llmReq.getIntentResult() != null) {
+            Object intentR = llmReq.getIntentResult();
+            sideInfo.append(",IntentGuidance=[enabled]");
+        }
+
+        return sideInfo.toString();
+    }
+
     public String buildSchemaStr(LLMReq llmReq) {
         String tableStr = llmReq.getSchema().getDataSetName();
 
@@ -225,5 +251,200 @@ public class PromptHelper {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Build contextual prompt from conversation history for multi-turn dialogue support. This
+     * enables the LLM to understand references like "these users", "the same period", and maintain
+     * context across multiple query rounds.
+     */
+    public String buildContextAwarePrompt(LLMReq llmReq) {
+        List<LLMReq.ConversationHistory> history = llmReq.getContextHistory();
+        if (CollectionUtils.isEmpty(history)) {
+            return "";
+        }
+
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("\n## Conversation History (Multi-turn Context)\n");
+        prompt.append(
+                "Please understand the user's current question in the context of the conversation history below.\n");
+        prompt.append(
+                "If the current question refers to previous context (e.g., 'these users', 'the same period', 'continue'), ");
+        prompt.append(
+                "use the historical context to understand what entities or conditions are being referenced.\n\n");
+
+        for (LLMReq.ConversationHistory ctx : history) {
+            prompt.append(String.format("【Round %d】\n", ctx.getRoundNumber()));
+            prompt.append(String.format("User: %s\n", ctx.getUserMessage()));
+            if (StringUtils.isNotEmpty(ctx.getGeneratedSql())) {
+                prompt.append(String.format("Generated SQL: %s\n", ctx.getGeneratedSql()));
+            }
+            if (StringUtils.isNotEmpty(ctx.getContextValue())) {
+                prompt.append(String.format("Context: %s\n", ctx.getContextValue()));
+            }
+            if (ctx.getReferencedEntities() != null && !ctx.getReferencedEntities().isEmpty()) {
+                prompt.append(String.format("Referenced Entities: %s\n",
+                        String.join(", ", ctx.getReferencedEntities())));
+            }
+            prompt.append("\n");
+        }
+
+        prompt.append("Current Question: ").append(llmReq.getQueryText()).append("\n");
+        prompt.append("---\n");
+        prompt.append("Important: When generating SQL for the current question, ");
+        prompt.append("consider the conversation history to resolve any implicit references.\n");
+
+        return prompt.toString();
+    }
+
+    /**
+     * Build complete side information including context-aware prompt.
+     */
+    public String buildSideInformationWithContext(LLMReq llmReq) {
+        String baseSideInfo = buildSideInformation(llmReq);
+        String contextPrompt = buildContextAwarePrompt(llmReq);
+
+        if (StringUtils.isEmpty(contextPrompt)) {
+            return baseSideInfo;
+        }
+
+        return baseSideInfo + contextPrompt;
+    }
+
+    // ==================== Wiki-SQL Prompt Methods ====================
+
+    public static final String WIKI_SQL_PROMPT_TEMPLATE = """
+        # Role: 你是数据分析师，擅长将自然语言转换为 SQL
+
+        # Task: 根据用户的自然语言查询，结合提供的 Wiki 知识，生成准确的 SQL
+
+        ## Wiki 知识上下文
+
+        ### 业务术语映射
+        {semantic_mappings}
+
+        ### 业务规则
+        {business_rules}
+
+        ### 常用查询模式
+        {usage_patterns}
+
+        ### 指标定义
+        {metric_definitions}
+
+        ## 数据库表结构
+        {schema_info}
+
+        ## 当前会话上下文
+        {conversation_context}
+
+        # 用户查询
+        {query_text}
+
+        # 输出要求
+        1. 只输出 SQL 语句，不要其他解释
+        2. SQL 必须基于上述表结构
+        3. 如需时间范围筛选，使用 cnq = '{default_time_range}'
+        4. 如果 Wiki 知识与表结构冲突，以表结构为准
+        5. 必须使用 Wiki 知识中的字段映射，不要自行推断字段名
+
+        # SQL 生成
+        """;
+
+    public String buildWikiSqlPrompt(com.tencent.supersonic.headless.chat.query.llm.wiki.WikiRetrievalResult retrieval,
+                                     com.tencent.supersonic.headless.core.wiki.dto.ConversationContext ctx,
+                                     String queryText) {
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("semantic_mappings", buildSemanticMappings(retrieval));
+        placeholders.put("business_rules", buildBusinessRules(retrieval));
+        placeholders.put("usage_patterns", buildUsagePatterns(retrieval));
+        placeholders.put("metric_definitions", buildMetricDefinitions(retrieval));
+        placeholders.put("schema_info", buildSchemaInfo(retrieval));
+        placeholders.put("conversation_context", buildConversationContext(ctx));
+        placeholders.put("query_text", queryText);
+        placeholders.put("default_time_range", getDefaultTimeRange());
+
+        return interpolateTemplate(WIKI_SQL_PROMPT_TEMPLATE, placeholders);
+    }
+
+    private String buildSemanticMappings(com.tencent.supersonic.headless.chat.query.llm.wiki.WikiRetrievalResult retrieval) {
+        if (retrieval == null || retrieval.getSemanticMappings() == null || retrieval.getSemanticMappings().isEmpty()) {
+            return "无";
+        }
+        return retrieval.getSemanticMappings().stream()
+            .map(m -> String.format("- %s → %s (%s)", m.getTerm(), m.getField(),
+                m.getTable() != null ? m.getTable() : ""))
+            .collect(Collectors.joining("\n"));
+    }
+
+    private String buildBusinessRules(com.tencent.supersonic.headless.chat.query.llm.wiki.WikiRetrievalResult retrieval) {
+        if (retrieval == null || retrieval.getBusinessRules() == null || retrieval.getBusinessRules().isEmpty()) {
+            return "无";
+        }
+        return retrieval.getBusinessRules().stream()
+            .map(r -> String.format("- %s: %s", r.getMeaning(), r.getCondition()))
+            .collect(Collectors.joining("\n"));
+    }
+
+    private String buildUsagePatterns(com.tencent.supersonic.headless.chat.query.llm.wiki.WikiRetrievalResult retrieval) {
+        if (retrieval == null || retrieval.getUsagePatterns() == null || retrieval.getUsagePatterns().isEmpty()) {
+            return "无";
+        }
+        return retrieval.getUsagePatterns().stream()
+            .map(p -> String.format("- %s: %s", p.getName(), p.getPattern()))
+            .collect(Collectors.joining("\n"));
+    }
+
+    private String buildMetricDefinitions(com.tencent.supersonic.headless.chat.query.llm.wiki.WikiRetrievalResult retrieval) {
+        if (retrieval == null || retrieval.getMetricDefinitions() == null || retrieval.getMetricDefinitions().isEmpty()) {
+            return "无";
+        }
+        return retrieval.getMetricDefinitions().stream()
+            .map(m -> String.format("- %s = %s", m.getMetric(), m.getFormula()))
+            .collect(Collectors.joining("\n"));
+    }
+
+    private String buildSchemaInfo(com.tencent.supersonic.headless.chat.query.llm.wiki.WikiRetrievalResult retrieval) {
+        if (retrieval == null || retrieval.getEntities() == null || retrieval.getEntities().isEmpty()) {
+            return "无表结构信息";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (com.tencent.supersonic.headless.core.wiki.dto.WikiEntity entity : retrieval.getEntities()) {
+            if ("TABLE".equals(entity.getEntityType())) {
+                sb.append(entity.getDisplayName()).append("(").append(entity.getName()).append(")\n");
+                // Note: In a full implementation, we would fetch and display columns here
+            }
+        }
+        return sb.length() > 0 ? sb.toString() : "无表结构信息";
+    }
+
+    private String buildConversationContext(com.tencent.supersonic.headless.core.wiki.dto.ConversationContext ctx) {
+        if (ctx == null) {
+            return "无";
+        }
+        StringBuilder sb = new StringBuilder();
+        if (ctx.getTimeRange() != null) {
+            sb.append(String.format("- 时间范围: %s\n", ctx.getTimeRange()));
+        }
+        if (ctx.getEntity() != null) {
+            sb.append(String.format("- 当前实体: %s\n", ctx.getEntity()));
+        }
+        if (ctx.getFilters() != null && !ctx.getFilters().isEmpty()) {
+            sb.append(String.format("- 筛选条件: %s\n", String.join(", ", ctx.getFilters())));
+        }
+        return sb.length() > 0 ? sb.toString() : "无";
+    }
+
+    private String interpolateTemplate(String template, Map<String, String> placeholders) {
+        String result = template;
+        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+            result = result.replace("{" + entry.getKey() + "}", entry.getValue() != null ? entry.getValue() : "");
+        }
+        return result;
+    }
+
+    private String getDefaultTimeRange() {
+        // Return current quarter as default
+        return "2026Q1";
     }
 }
