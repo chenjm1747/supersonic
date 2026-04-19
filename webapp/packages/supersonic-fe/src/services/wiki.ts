@@ -88,6 +88,26 @@ export const getGraphEdges = async (): Promise<ApiResponse<GraphEdge[]>> => {
   });
 };
 
+export const getLazyNodes = async (
+  type?: string,
+  parentId?: string,
+): Promise<ApiResponse<GraphNode[]>> => {
+  const params = new URLSearchParams();
+  if (type) params.append('type', type);
+  if (parentId) params.append('parentId', parentId);
+  return request(`/api/wiki/graph/nodes/lazy?${params.toString()}`, {
+    method: 'GET',
+  });
+};
+
+export const getLazyEdges = async (
+  nodeIds: string[],
+): Promise<ApiResponse<GraphEdge[]>> => {
+  return request(`/api/wiki/graph/edges/lazy?nodeIds=${nodeIds.join(',')}`, {
+    method: 'GET',
+  });
+};
+
 export const getEntityNeighbors = async (
   entityId: string,
   depth: number = 1,
@@ -498,6 +518,29 @@ export const getEnhancementTrends = async (
   return request('/api/wiki/enhancement/trends', {
     method: 'GET',
     params: { days },
+  });
+};
+
+// ==================== DataSource APIs ====================
+
+export interface DataSourceConfig {
+  id?: number;
+  name: string;
+  type: string;
+  host: string;
+  port: number;
+  databaseName: string;
+  username: string;
+  passwordEncrypted?: string;
+  properties?: Record<string, any>;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export const getDataSources = async (): Promise<ApiResponse<DataSourceConfig[]>> => {
+  return request('/api/wiki/datasources', {
+    method: 'GET',
   });
 };
 
