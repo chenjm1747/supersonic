@@ -500,3 +500,57 @@ export const getEnhancementTrends = async (
     params: { days },
   });
 };
+
+// ==================== DataSource Import APIs ====================
+
+export interface ImportPreview {
+  tables: TablePreviewItem[];
+  totalCount: number;
+  conflictCount: number;
+  newCount: number;
+}
+
+export interface TablePreviewItem {
+  tableName: string;
+  displayName: string;
+  description: string;
+  columns: ColumnPreviewItem[];
+  conflictStatus: 'NEW' | 'EXISTS';
+}
+
+export interface ColumnPreviewItem {
+  columnName: string;
+  displayName: string;
+  description: string;
+  dataType: string;
+}
+
+export interface TableSelection {
+  tableName: string;
+  action: 'IMPORT' | 'SKIP';
+}
+
+export interface ImportApiResult {
+  successCount: number;
+  skipCount: number;
+  failCount: number;
+  failedTables: string[];
+}
+
+export const getImportPreview = async (
+  dataSourceId: number,
+): Promise<ApiResponse<ImportPreview>> => {
+  return request(`/api/wiki/schema/import-preview/${dataSourceId}`, {
+    method: 'GET',
+  });
+};
+
+export const importFromDataSource = async (
+  dataSourceId: number,
+  selections: TableSelection[],
+): Promise<ApiResponse<ImportApiResult>> => {
+  return request(`/api/wiki/schema/import-from-datasource/${dataSourceId}`, {
+    method: 'POST',
+    data: selections,
+  });
+};
