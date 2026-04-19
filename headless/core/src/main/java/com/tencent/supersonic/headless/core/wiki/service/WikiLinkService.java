@@ -89,6 +89,15 @@ public class WikiLinkService {
         return jdbcTemplate.query(SELECT_ALL_LINKS_SQL, new WikiLinkRowMapper());
     }
 
+    public List<WikiLink> getLinksByEntityIds(List<String> entityIds) {
+        if (entityIds == null || entityIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        String inClause = String.join(",", entityIds.stream().map(id -> "'" + id + "'").toList());
+        String sql = "SELECT * FROM s2_wiki_entity_link WHERE source_entity_id IN (" + inClause + ") OR target_entity_id IN (" + inClause + ")";
+        return jdbcTemplate.query(sql, new WikiLinkRowMapper());
+    }
+
     @Transactional
     public void deleteLink(String sourceEntityId, String targetEntityId, String linkType) {
         log.info("Deleting wiki link: {} -> {} ({})", sourceEntityId, targetEntityId, linkType);

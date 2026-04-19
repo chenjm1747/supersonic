@@ -144,6 +144,32 @@ public class WikiEntityService {
         return entities;
     }
 
+    public List<WikiEntity> getChildEntitiesByType(String type, String parentEntityId) {
+        String sql = """
+                SELECT * FROM s2_wiki_entity
+                WHERE entity_type = ? AND status = 'ACTIVE'
+                AND parent_entity_id = ?
+                ORDER BY name
+                """;
+        List<WikiEntity> entities =
+                jdbcTemplate.query(sql, new WikiEntityRowMapper(), type, parentEntityId);
+        Map<String, List<String>> topicMap = getAllEntityTopicMappings();
+        for (WikiEntity entity : entities) {
+            entity.setTopicIds(topicMap.getOrDefault(entity.getEntityId(), new ArrayList<>()));
+        }
+        return entities;
+    }
+
+    public int countChildEntities(String parentEntityId) {
+        String sql = """
+                SELECT COUNT(*) FROM s2_wiki_entity
+                WHERE status = 'ACTIVE'
+                AND parent_entity_id = ?
+                """;
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, parentEntityId);
+        return count != null ? count : 0;
+    }
+
     public List<WikiEntity> getEntitiesByTopic(String topicId) {
         List<WikiEntity> entities =
                 jdbcTemplate.query(SELECT_BY_TOPIC_SQL, new WikiEntityRowMapper(), topicId);

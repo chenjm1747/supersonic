@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -96,6 +97,44 @@ public class WikiController {
             log.error("Failed to get graph edges", e);
             resp.setSuccess(false);
             resp.setMessage("Failed to get graph edges: " + e.getMessage());
+        }
+        return resp;
+    }
+
+    @GetMapping("/graph/nodes/lazy")
+    public BaseResp<List<WikiGraphService.GraphNode>> getLazyNodes(
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String parentId) {
+        BaseResp<List<WikiGraphService.GraphNode>> resp = new BaseResp<>();
+        try {
+            List<WikiGraphService.GraphNode> nodes = graphService.getChildNodes(type, parentId);
+            resp.setSuccess(true);
+            resp.setData(nodes);
+            resp.setMessage("Get lazy nodes successfully");
+        } catch (Exception e) {
+            log.error("Failed to get lazy nodes", e);
+            resp.setSuccess(false);
+            resp.setMessage("Failed to get lazy nodes: " + e.getMessage());
+        }
+        return resp;
+    }
+
+    @GetMapping("/graph/edges/lazy")
+    public BaseResp<List<WikiGraphService.GraphEdge>> getLazyEdges(
+            @RequestParam(required = false) String nodeIds) {
+        BaseResp<List<WikiGraphService.GraphEdge>> resp = new BaseResp<>();
+        try {
+            List<String> idList = nodeIds != null && !nodeIds.isEmpty()
+                    ? Arrays.asList(nodeIds.split(","))
+                    : new ArrayList<>();
+            List<WikiGraphService.GraphEdge> edges = graphService.getEdgesByNodeIds(idList);
+            resp.setSuccess(true);
+            resp.setData(edges);
+            resp.setMessage("Get lazy edges successfully");
+        } catch (Exception e) {
+            log.error("Failed to get lazy edges", e);
+            resp.setSuccess(false);
+            resp.setMessage("Failed to get lazy edges: " + e.getMessage());
         }
         return resp;
     }

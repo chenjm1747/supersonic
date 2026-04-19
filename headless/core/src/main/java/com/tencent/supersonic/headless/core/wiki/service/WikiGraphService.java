@@ -77,6 +77,56 @@ public class WikiGraphService {
         return edges;
     }
 
+    public List<GraphNode> getChildNodes(String type, String parentId) {
+        List<WikiEntity> entities;
+        if (parentId != null && !parentId.isEmpty()) {
+            entities = entityService.getChildEntitiesByType(type, parentId);
+        } else {
+            entities = entityService.getEntitiesByType(type);
+        }
+        List<GraphNode> nodes = new ArrayList<>();
+        for (WikiEntity entity : entities) {
+            nodes.add(convertToGraphNode(entity));
+        }
+        return nodes;
+    }
+
+    public List<GraphEdge> getEdgesByNodeIds(List<String> nodeIds) {
+        List<WikiLink> links = linkService.getLinksByEntityIds(nodeIds);
+        List<GraphEdge> edges = new ArrayList<>();
+        for (WikiLink link : links) {
+            edges.add(convertToGraphEdge(link));
+        }
+        return edges;
+    }
+
+    private GraphNode convertToGraphNode(WikiEntity entity) {
+        GraphNode node = new GraphNode();
+        node.setId(entity.getEntityId());
+        node.setName(entity.getName());
+        node.setDisplayName(entity.getDisplayName());
+        node.setType(entity.getEntityType());
+        node.setDescription(entity.getDescription());
+        node.setProperties(entity.getProperties());
+        node.setStatus(entity.getStatus());
+        node.setTopicId(entity.getTopicId());
+        List<String> topicIds = entityService.getTopicIdsByEntityId(entity.getEntityId());
+        node.setTopicIds(topicIds);
+        return node;
+    }
+
+    private GraphEdge convertToGraphEdge(WikiLink link) {
+        GraphEdge edge = new GraphEdge();
+        edge.setId(link.getId().toString());
+        edge.setSource(link.getSourceEntityId());
+        edge.setTarget(link.getTargetEntityId());
+        edge.setType(link.getLinkType());
+        edge.setLabel(link.getRelation());
+        edge.setWeight(link.getWeight() != null ? link.getWeight().floatValue() : 1.0f);
+        edge.setBidirectional(link.getBidirectional());
+        return edge;
+    }
+
     public List<GraphNode> getNeighborNodes(String entityId, int depth) {
         Map<String, Boolean> visited = new HashMap<>();
         List<GraphNode> result = new ArrayList<>();
