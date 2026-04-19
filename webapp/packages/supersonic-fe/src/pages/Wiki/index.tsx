@@ -10,6 +10,7 @@ import HealthSection from './components/HealthSection';
 import SchemaImportSection from './components/SchemaImportSection';
 import {
   getLazyNodes,
+  getLazyEdges,
   getEntities,
   getPendingContradictions,
   GraphNode,
@@ -81,6 +82,14 @@ const Wiki: React.FC = () => {
     setSelectedEntity(node);
   };
 
+  const handleNodesChange = (updatedNodes: GraphNode[]) => {
+    setGraphNodes(updatedNodes);
+  };
+
+  const handleEdgesChange = (updatedEdges: GraphEdge[]) => {
+    setGraphEdges(updatedEdges);
+  };
+
   const handleRefreshGraph = () => {
     fetchGraphData();
   };
@@ -97,6 +106,8 @@ const Wiki: React.FC = () => {
               onNodeClick={handleNodeClick}
               loading={graphLoading}
               onRefresh={handleRefreshGraph}
+              onNodesChange={handleNodesChange}
+              onEdgesChange={handleEdgesChange}
             />
           </TabPane>
           <TabPane tab="实体列表" key="entities">
