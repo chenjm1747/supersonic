@@ -39,7 +39,13 @@ import {
   autoGenerateKnowledge,
   getEntities,
   WikiEntity,
+  getImportPreview,
+  importFromDataSource,
+  getDataSources,
+  TablePreviewItem,
+  TableSelection,
 } from '@/services/wiki';
+import { Checkbox } from 'antd';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -59,10 +65,40 @@ const SchemaImportSection: React.FC = () => {
   const [generatedCards, setGeneratedCards] = useState<WikiKnowledgeCard[]>([]);
   const [generating, setGenerating] = useState(false);
 
+  interface DataSource {
+    id: number;
+    name: string;
+    type: string;
+    databaseName: string;
+  }
+
+  const [dataSources, setDataSources] = useState<DataSource[]>([]);
+  const [selectedDataSource, setSelectedDataSource] = useState<number | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [selectedTables, setSelectedTables] = useState<string[]>([]);
+  const [conflictModalVisible, setConflictModalVisible] = useState(false);
+  const [conflictTables, setConflictTables] = useState<TablePreviewItem[]>([]);
+  const [tableActions, setTableActions] = useState<Record<string, 'IMPORT' | 'SKIP'>>({});
+
   useEffect(() => {
     fetchTemplate();
     fetchEntities();
   }, []);
+
+  useEffect(() => {
+    fetchDataSources();
+  }, []);
+
+  const fetchDataSources = async () => {
+    try {
+      const resp = await getDataSources();
+      if (resp.success && resp.data) {
+        setDataSources(resp.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch datasources:', error);
+    }
+  };
 
   const fetchTemplate = async () => {
     setTemplateLoading(true);
@@ -177,6 +213,67 @@ const SchemaImportSection: React.FC = () => {
     }
   };
 
+  const handleDataSourceChange = (value: number) => {
+    setSelectedDataSource(value);
+    setImportPreview(null);
+    setSelectedTables([]);
+  };
+
+  const handleLoadPreview = async () => {
+    if (!selectedDataSource) return;
+    try {
+      const resp = await getImportPreview(selectedDataSource);
+      if (resp.success && resp.data) {
+        setImportPreview(resp.data);
+        const allTableNames = resp.data.tables.map((t: TablePreviewItem) => t.tableName);
+        setSelectedTables(allTableNames);
+      }
+    } catch (error) {
+      message.error('加载表结构失败');
+    }
+  };
+
+  const handleTableSelect = (tableName: string, checked: boolean) => {
+    if (checked) {
+      setSelectedTables([...selectedTables, tableName]);
+    } else {
+      setSelectedTables(selectedTables.filter((t) => t !== tableName));
+    }
+  };
+
+  const handleImportDataSource = async () => {
+    const conflicts = importPreview?.tables.filter(
+      (t: TablePreviewItem) => t.conflictStatus === 'EXISTS' && selectedTables.includes(t.tableName)
+    );
+
+    if (conflicts && conflicts.length > 0) {
+      setConflictTables(conflicts);
+      setConflictModalVisible(true);
+      return;
+    }
+
+    await executeImport([]);
+  };
+
+  const executeImport = async (selections: TableSelection[]) => {
+    if (!selectedDataSource) return;
+    setLoading(true);
+    try {
+      const resp = await importFromDataSource(selectedDataSource, selections);
+      if (resp.success && resp.data) {
+        message.success(`导入完成: 成功 ${resp.data.successCount}, 跳过 ${resp.data.skipCount}`);
+        if (resp.data.failCount > 0) {
+          message.warning(`失败 ${resp.data.failCount} 个表`);
+        }
+        setConflictModalVisible(false);
+      }
+    } catch (error) {
+      message.error('导入失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const previewColumns = [
     {
       title: '类型',
@@ -231,6 +328,67 @@ const SchemaImportSection: React.FC = () => {
       ),
     },
   ];
+
+  const ConflictModal = () => {
+    if (!conflictTables.length) return null;
+
+    const handleBatchAction = (action: 'IMPORT' | 'SKIP') => {
+      const newActions = { ...tableActions };
+      conflictTables.forEach((t: TablePreviewItem) => {
+        newActions[t.tableName] = action;
+      });
+      setTableActions(newActions);
+    };
+
+    const handleConfirm = async () => {
+      const selections: TableSelection[] = selectedTables.map((tableName) => ({
+        tableName,
+        action: tableActions[tableName] || 'IMPORT',
+      }));
+      await executeImport(selections);
+    };
+
+    return (
+      <Modal
+        title="以下表已存在，请选择处理方式"
+        open={conflictModalVisible}
+        onCancel={() => setConflictModalVisible(false)}
+        onOk={handleConfirm}
+      >
+        <Table
+          rowKey="tableName"
+          columns={[
+            { title: '表名', dataIndex: 'tableName' },
+            { title: '操作', render: (_, record) => (
+              <Space>
+                <Button
+                  size="small"
+                  type={tableActions[record.tableName] === 'IMPORT' ? 'primary' : 'default'}
+                  onClick={() => setTableActions({ ...tableActions, [record.tableName]: 'IMPORT' })}
+                >
+                  覆盖此表
+                </Button>
+                <Button
+                  size="small"
+                  type={tableActions[record.tableName] === 'SKIP' ? 'primary' : 'default'}
+                  onClick={() => setTableActions({ ...tableActions, [record.tableName]: 'SKIP' })}
+                >
+                  跳过此表
+                </Button>
+              </Space>
+            )},
+          ]}
+          dataSource={conflictTables}
+          pagination={false}
+          size="small"
+        />
+        <Space style={{ marginTop: 16 }}>
+          <Button onClick={() => handleBatchAction('IMPORT')}>全部覆盖</Button>
+          <Button onClick={() => handleBatchAction('SKIP')}>全部跳过</Button>
+        </Space>
+      </Modal>
+    );
+  };
 
   return (
     <div>
@@ -424,6 +582,77 @@ const SchemaImportSection: React.FC = () => {
                     />
                   </Card>
                 )}
+              </div>
+            ),
+          },
+          {
+            key: 'datasource',
+            label: (
+              <span>
+                <UploadOutlined />
+                从数据源导入
+              </span>
+            ),
+            children: (
+              <div>
+                <Space style={{ marginBottom: 16 }}>
+                  <Select
+                    placeholder="选择数据源"
+                    style={{ width: 300 }}
+                    onChange={handleDataSourceChange}
+                    value={selectedDataSource}
+                  >
+                    {dataSources.map((ds) => (
+                      <Option key={ds.id} value={ds.id}>
+                        {ds.name} ({ds.type} - {ds.databaseName})
+                      </Option>
+                    ))}
+                  </Select>
+                  <Button
+                    type="primary"
+                    onClick={handleLoadPreview}
+                    disabled={!selectedDataSource}
+                  >
+                    加载表结构
+                  </Button>
+                </Space>
+
+                {importPreview && (
+                  <Table
+                    rowKey="tableName"
+                    columns={[
+                      { title: '选择', render: (_, record) => (
+                        <Checkbox
+                          checked={selectedTables.includes(record.tableName)}
+                          onChange={(e) => handleTableSelect(record.tableName, e.target.checked)}
+                        />
+                      )},
+                      { title: '表名', dataIndex: 'tableName' },
+                      { title: '中文名', dataIndex: 'displayName' },
+                      { title: '字段数', render: (_, record) => record.columns?.length || 0 },
+                      { title: '状态', render: (_, record) => (
+                        <Tag color={record.conflictStatus === 'NEW' ? 'green' : 'orange'}>
+                          {record.conflictStatus === 'NEW' ? '新增' : '已存在'}
+                        </Tag>
+                      )},
+                    ]}
+                    dataSource={importPreview.tables}
+                    pagination={false}
+                    size="small"
+                  />
+                )}
+
+                <Space style={{ marginTop: 16 }}>
+                  <Button
+                    type="primary"
+                    onClick={handleImportDataSource}
+                    disabled={selectedTables.length === 0}
+                  >
+                    导入选中表 ({selectedTables.length})
+                  </Button>
+                </Space>
+
+                <ConflictModal />
               </div>
             ),
           },
