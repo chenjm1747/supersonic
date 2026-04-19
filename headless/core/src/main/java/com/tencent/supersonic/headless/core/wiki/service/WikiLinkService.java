@@ -93,9 +93,10 @@ public class WikiLinkService {
         if (entityIds == null || entityIds.isEmpty()) {
             return new ArrayList<>();
         }
-        String inClause = String.join(",", entityIds.stream().map(id -> "'" + id + "'").toList());
+        String inClause = entityIds.stream().map(id -> "?").collect(java.util.stream.Collectors.joining(","));
         String sql = "SELECT * FROM s2_wiki_entity_link WHERE source_entity_id IN (" + inClause + ") OR target_entity_id IN (" + inClause + ")";
-        return jdbcTemplate.query(sql, new WikiLinkRowMapper());
+        Object[] params = entityIds.stream().toArray();
+        return jdbcTemplate.query(sql, params, new WikiLinkRowMapper());
     }
 
     @Transactional
