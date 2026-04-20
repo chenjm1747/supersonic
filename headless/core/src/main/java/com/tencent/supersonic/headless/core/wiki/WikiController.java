@@ -7,6 +7,8 @@ import com.tencent.supersonic.headless.core.wiki.dto.DataSourceConfig;
 import com.tencent.supersonic.headless.core.wiki.dto.Evidence;
 import com.tencent.supersonic.headless.core.wiki.dto.TopicSummary;
 import com.tencent.supersonic.headless.core.wiki.dto.WikiEntity;
+import com.tencent.supersonic.headless.core.wiki.dto.KnowledgeCardGenerateReq;
+import com.tencent.supersonic.headless.core.wiki.dto.KnowledgeCardGenerateResp;
 import com.tencent.supersonic.headless.core.wiki.dto.WikiKnowledgeCard;
 import com.tencent.supersonic.headless.core.wiki.dto.WikiLink;
 import com.tencent.supersonic.headless.core.wiki.service.WikiChatService;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -107,7 +110,9 @@ public class WikiController {
             @RequestParam(required = false) String parentId) {
         BaseResp<List<WikiGraphService.GraphNode>> resp = new BaseResp<>();
         try {
+            log.info("getLazyNodes called with type=[{}], parentId=[{}]", type, parentId);
             List<WikiGraphService.GraphNode> nodes = graphService.getChildNodes(type, parentId);
+            log.info("getLazyNodes returning {} nodes", nodes.size());
             resp.setSuccess(true);
             resp.setData(nodes);
             resp.setMessage("Get lazy nodes successfully");
@@ -124,9 +129,9 @@ public class WikiController {
             @RequestParam(required = false) String nodeIds) {
         BaseResp<List<WikiGraphService.GraphEdge>> resp = new BaseResp<>();
         try {
-            List<String> idList = nodeIds != null && !nodeIds.isEmpty()
-                    ? Arrays.asList(nodeIds.split(","))
-                    : new ArrayList<>();
+            List<String> idList =
+                    nodeIds != null && !nodeIds.isEmpty() ? Arrays.asList(nodeIds.split(","))
+                            : new ArrayList<>();
             List<WikiGraphService.GraphEdge> edges = graphService.getEdgesByNodeIds(idList);
             resp.setSuccess(true);
             resp.setData(edges);
@@ -327,21 +332,34 @@ public class WikiController {
     }
 
     @GetMapping("/knowledge")
-    public BaseResp<List<WikiKnowledgeCard>> getKnowledgeCards(
+    public BaseResp<Map<String, Object>> getKnowledgeCards(
             @RequestParam(required = false) String entityId,
-            @RequestParam(required = false) String cardType) {
-        BaseResp<List<WikiKnowledgeCard>> resp = new BaseResp<>();
+            @RequestParam(required = false) String cardType,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        BaseResp<Map<String, Object>> resp = new BaseResp<>();
         try {
             List<WikiKnowledgeCard> cards;
+            int total = 0;
             if (entityId != null && !entityId.isEmpty()) {
-                cards = knowledgeService.getCardsByEntityId(entityId);
+                total = knowledgeService.countCardsByEntityId(entityId);
+                if (total > 0) {
+                    cards = knowledgeService.getCardsByEntityIdPaginated(entityId, page, pageSize);
+                } else {
+                    cards = List.of();
+                }
             } else if (cardType != null && !cardType.isEmpty()) {
                 cards = knowledgeService.getCardsByType(cardType);
             } else {
                 cards = List.of();
             }
+            Map<String, Object> result = new HashMap<>();
+            result.put("cards", cards);
+            result.put("total", total);
+            result.put("page", page);
+            result.put("pageSize", pageSize);
             resp.setSuccess(true);
-            resp.setData(cards);
+            resp.setData(result);
             resp.setMessage("Get knowledge cards successfully");
         } catch (Exception e) {
             log.error("Failed to get knowledge cards", e);
@@ -384,6 +402,33 @@ public class WikiController {
             log.error("Failed to create knowledge card", e);
             resp.setSuccess(false);
             resp.setMessage("Failed to create knowledge card: " + e.getMessage());
+        }
+        return resp;
+    }
+
+    @PostMapping("/knowledge/generate")
+    public BaseResp<KnowledgeCardGenerateResp> generateKnowledgeCard(
+            @RequestBody KnowledgeCardGenerateReq req) {
+        BaseResp<KnowledgeCardGenerateResp> resp = new BaseResp<>();
+        try {
+            if (req.getEntityId() == null || req.getEntityId().isEmpty()) {
+                resp.setSuccess(false);
+                resp.setMessage("entityId is required");
+                return resp;
+            }
+            KnowledgeCardGenerateResp result = knowledgeService.generateKnowledgeCard(req);
+            if (result == null) {
+                resp.setSuccess(false);
+                resp.setMessage("Failed to generate knowledge card");
+            } else {
+                resp.setSuccess(true);
+                resp.setData(result);
+                resp.setMessage("Generate successfully");
+            }
+        } catch (Exception e) {
+            log.error("Failed to generate knowledge card", e);
+            resp.setSuccess(false);
+            resp.setMessage("Failed to generate knowledge card: " + e.getMessage());
         }
         return resp;
     }
@@ -912,8 +957,7 @@ public class WikiController {
     // ==================== Knowledge Card Management ====================
 
     @GetMapping("/knowledge/search")
-    public BaseResp<List<WikiKnowledgeCard>> searchKnowledge(
-            @RequestParam String query,
+    public BaseResp<List<WikiKnowledgeCard>> searchKnowledge(@RequestParam String query,
             @RequestParam(defaultValue = "10") int topK) {
         BaseResp<List<WikiKnowledgeCard>> resp = new BaseResp<>();
         try {
