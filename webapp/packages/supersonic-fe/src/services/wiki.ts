@@ -1,4 +1,4 @@
-import { request } from 'umi';
+import request from './request';
 
 export interface GraphNode {
   id: string;
@@ -10,6 +10,7 @@ export interface GraphNode {
   topicId?: string;
   topicIds?: string[];
   properties?: Record<string, any>;
+  parentEntityId?: string;
   depth?: number;
 }
 
@@ -187,11 +188,12 @@ export const getEntityTopics = async (
 
 export const getKnowledgeCards = async (
   entityId?: string,
-  cardType?: string,
-): Promise<ApiResponse<WikiKnowledgeCard[]>> => {
+  page: number = 1,
+  pageSize: number = 10,
+): Promise<ApiResponse<any>> => {
   return request('/api/wiki/knowledge', {
     method: 'GET',
-    params: { entityId, cardType },
+    params: { entityId, page, pageSize },
   });
 };
 
@@ -485,6 +487,32 @@ export const autoGenerateKnowledge = async (
   });
 };
 
+// ==================== Knowledge Card AI Generate API ====================
+
+export interface KnowledgeCardGenerateReq {
+  entityId: string;
+  cardType?: string;
+  title?: string;
+}
+
+export interface KnowledgeCardGenerateResp {
+  title: string;
+  cardType: string;
+  content: string;
+  confidence: number;
+  tags: string[];
+  extractedFrom: string[];
+}
+
+export const generateKnowledgeCard = async (
+  req: KnowledgeCardGenerateReq,
+): Promise<ApiResponse<KnowledgeCardGenerateResp>> => {
+  return request('/api/wiki/knowledge/generate', {
+    method: 'POST',
+    data: req,
+  });
+};
+
 // ==================== Self Enhancement APIs ====================
 
 export interface SelfEnhancementTrend {
@@ -571,6 +599,7 @@ export interface ColumnPreviewItem {
 export interface TableSelection {
   tableName: string;
   action: 'IMPORT' | 'SKIP';
+  topicIds?: string[];
 }
 
 export interface ImportApiResult {
