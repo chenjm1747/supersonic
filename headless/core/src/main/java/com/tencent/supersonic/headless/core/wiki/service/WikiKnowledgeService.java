@@ -304,37 +304,65 @@ public class WikiKnowledgeService {
     }
 
     public KnowledgeCardGenerateResp generateKnowledgeCard(KnowledgeCardGenerateReq req) {
-        // 1. 获取实体信息
+        // 1. Validate request parameters
+        if (req == null || req.getEntityId() == null || req.getEntityId().trim().isEmpty()) {
+            log.warn("Invalid request: entityId is required");
+            return null;
+        }
+
+        // 2. Get entity info
         WikiEntity entity = entityService.getEntityById(req.getEntityId());
         if (entity == null) {
             return null;
         }
 
-        // 2. 获取子实体（字段）
+        // 3. Get child entities (fields)
         List<WikiEntity> childEntities = entityService.getChildEntities(req.getEntityId());
 
-        // 3. 获取关联实体（通过 link 表查询）
+        // 4. Get related entities (via link table)
         List<WikiEntity> relatedEntities = getRelatedEntities(req.getEntityId());
 
-        // 4. 构建 Prompt
+        // 5. Build Prompt
         String prompt = KnowledgeCardPromptBuilder.buildPrompt(
                 req.getCardType(), req.getTitle(), entity, childEntities, relatedEntities);
 
-        // 5. 调用 LLM
-        try {
-            ChatLanguageModel model = ModelProvider.getChatModel();
-            String response = model.generate(prompt);
+        // 6. Call LLM with retry handling
+        ChatLanguageModel model = ModelProvider.getChatModel();
+        String response = null;
+        int maxRetries = 3;
+        int attempt = 0;
 
-            // 6. 解析响应
+        while (attempt < maxRetries) {
+            try {
+                response = model.generate(prompt);
+                break;
+            } catch (Exception e) {
+                attempt++;
+                log.warn("LLM call failed (attempt {}/{}): {}", attempt, maxRetries, e.getMessage());
+                if (attempt >= maxRetries) {
+                    log.error("LLM call failed after {} attempts, entityId: {}", maxRetries, req.getEntityId(), e);
+                }
+            }
+        }
+
+        if (response == null) {
+            return null;
+        }
+
+        // 7. Parse response
+        try {
             return KnowledgeCardRespParser.parse(response);
         } catch (Exception e) {
-            log.warn("LLM call failed for knowledge card generation: {}", e.getMessage());
+            log.error("Failed to parse LLM response for knowledge card generation: {}", req.getEntityId(), e);
             return null;
         }
     }
 
     private List<WikiEntity> getRelatedEntities(String entityId) {
         List<WikiLink> links = linkService.getLinksByEntity(entityId);
+        if (links == null || links.isEmpty()) {
+            return new ArrayList<>();
+        }
         List<WikiEntity> relatedEntities = new ArrayList<>();
         for (WikiLink link : links) {
             String relatedId = entityId.equals(link.getSourceEntityId())
