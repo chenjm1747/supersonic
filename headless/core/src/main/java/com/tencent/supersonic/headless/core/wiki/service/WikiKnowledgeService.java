@@ -2,10 +2,19 @@ package com.tencent.supersonic.headless.core.wiki.service;
 
 import javax.sql.DataSource;
 
+import com.tencent.supersonic.headless.core.wiki.dto.KnowledgeCardGenerateReq;
+import com.tencent.supersonic.headless.core.wiki.dto.KnowledgeCardGenerateResp;
+import com.tencent.supersonic.headless.core.wiki.dto.WikiEntity;
 import com.tencent.supersonic.headless.core.wiki.dto.WikiKnowledgeCard;
+import com.tencent.supersonic.headless.core.wiki.dto.WikiLink;
+import com.tencent.supersonic.headless.core.wiki.util.KnowledgeCardPromptBuilder;
+import com.tencent.supersonic.headless.core.wiki.util.KnowledgeCardRespParser;
+import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.provider.ModelProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
@@ -29,6 +38,12 @@ public class WikiKnowledgeService {
     private static final Logger keyPipelineLog = LoggerFactory.getLogger("keyPipeline");
     private final JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private WikiEntityService entityService;
+
+    @Autowired
+    private WikiLinkService linkService;
+
     private static final String INSERT_CARD_SQL =
             """
                     INSERT INTO s2_wiki_knowledge_card
@@ -47,10 +62,16 @@ public class WikiKnowledgeService {
             "SELECT * FROM s2_wiki_knowledge_card WHERE card_id = ?";
 
     private static final String SELECT_BY_ENTITY_SQL =
-            "SELECT * FROM s2_wiki_knowledge_card WHERE entity_id = ? AND status = 'ACTIVE'";
+            "SELECT * FROM s2_wiki_knowledge_card WHERE entity_id = ? AND status IN ('ACTIVE', 'AUTO_GENERATED') ORDER BY created_at DESC";
+
+    private static final String SELECT_BY_ENTITY_WITH_PAGINATION_SQL =
+            "SELECT * FROM s2_wiki_knowledge_card WHERE entity_id = ? AND status IN ('ACTIVE', 'AUTO_GENERATED') ORDER BY created_at DESC LIMIT ? OFFSET ?";
 
     private static final String SELECT_BY_TYPE_SQL =
-            "SELECT * FROM s2_wiki_knowledge_card WHERE card_type = ? AND status = 'ACTIVE'";
+            "SELECT * FROM s2_wiki_knowledge_card WHERE card_type = ? AND status IN ('ACTIVE', 'AUTO_GENERATED')";
+
+    private static final String COUNT_BY_ENTITY_SQL =
+            "SELECT COUNT(*) FROM s2_wiki_knowledge_card WHERE entity_id = ? AND status IN ('ACTIVE', 'AUTO_GENERATED')";
 
     private static final String DELETE_CARD_SQL =
             "UPDATE s2_wiki_knowledge_card SET status = 'DELETED', updated_at = ? WHERE card_id = ?";
@@ -159,6 +180,18 @@ public class WikiKnowledgeService {
         return jdbcTemplate.query(SELECT_BY_ENTITY_SQL, new WikiKnowledgeCardRowMapper(), entityId);
     }
 
+    public List<WikiKnowledgeCard> getCardsByEntityIdPaginated(String entityId, int page,
+            int pageSize) {
+        int offset = (page - 1) * pageSize;
+        return jdbcTemplate.query(SELECT_BY_ENTITY_WITH_PAGINATION_SQL,
+                new WikiKnowledgeCardRowMapper(), entityId, pageSize, offset);
+    }
+
+    public int countCardsByEntityId(String entityId) {
+        Integer count = jdbcTemplate.queryForObject(COUNT_BY_ENTITY_SQL, Integer.class, entityId);
+        return count != null ? count : 0;
+    }
+
     public List<WikiKnowledgeCard> getCardsByType(String cardType) {
         return jdbcTemplate.query(SELECT_BY_TYPE_SQL, new WikiKnowledgeCardRowMapper(), cardType);
     }
@@ -224,13 +257,13 @@ public class WikiKnowledgeService {
                 + "AND content LIKE ? AND content LIKE ? AND status = 'ACTIVE'";
         String termPattern = "%\"term\":\"" + term + "\"%";
         String fieldPattern = "%\"field\":\"" + field + "\"%";
-        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, entityId, termPattern, fieldPattern);
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, entityId, termPattern,
+                fieldPattern);
         return count != null && count > 0;
     }
 
     public int countOutdatedCards(int daysThreshold) {
-        String sql = "SELECT COUNT(*) FROM s2_wiki_knowledge_card "
-                + "WHERE status = 'ACTIVE' "
+        String sql = "SELECT COUNT(*) FROM s2_wiki_knowledge_card " + "WHERE status = 'ACTIVE' "
                 + "AND updated_at < NOW() - INTERVAL '1 day' * ?";
         Integer count = jdbcTemplate.queryForObject(sql, Integer.class, daysThreshold);
         return count != null ? count : 0;
@@ -243,7 +276,8 @@ public class WikiKnowledgeService {
     }
 
     public Double getAvgConfidence() {
-        String sql = "SELECT AVG(confidence) FROM s2_wiki_knowledge_card WHERE status = 'ACTIVE' AND confidence IS NOT NULL";
+        String sql =
+                "SELECT AVG(confidence) FROM s2_wiki_knowledge_card WHERE status = 'ACTIVE' AND confidence IS NOT NULL";
         BigDecimal result = jdbcTemplate.queryForObject(sql, BigDecimal.class);
         return result != null ? result.doubleValue() : null;
     }
@@ -255,18 +289,63 @@ public class WikiKnowledgeService {
             String type = rs.getString("card_type");
             Long count = rs.getLong("cnt");
             return new java.util.AbstractMap.SimpleEntry<>(type, count);
-        }).stream().collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue));
+        }).stream().collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey,
+                java.util.Map.Entry::getValue));
     }
 
     public List<Map<String, Object>> getCompoundingTrend(int days) {
         String sql = "SELECT DATE(created_at) as date, "
                 + "SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) as success_count, "
                 + "SUM(CASE WHEN status = 'SUPERSEDED' THEN 1 ELSE 0 END) as failure_count, "
-                + "AVG(confidence) as avg_confidence "
-                + "FROM s2_wiki_knowledge_card "
+                + "AVG(confidence) as avg_confidence " + "FROM s2_wiki_knowledge_card "
                 + "WHERE created_at >= NOW() - INTERVAL '1 day' * ? "
                 + "GROUP BY DATE(created_at) ORDER BY date";
         return jdbcTemplate.queryForList(sql, days);
+    }
+
+    public KnowledgeCardGenerateResp generateKnowledgeCard(KnowledgeCardGenerateReq req) {
+        // 1. 获取实体信息
+        WikiEntity entity = entityService.getEntityById(req.getEntityId());
+        if (entity == null) {
+            return null;
+        }
+
+        // 2. 获取子实体（字段）
+        List<WikiEntity> childEntities = entityService.getChildEntities(req.getEntityId());
+
+        // 3. 获取关联实体（通过 link 表查询）
+        List<WikiEntity> relatedEntities = getRelatedEntities(req.getEntityId());
+
+        // 4. 构建 Prompt
+        String prompt = KnowledgeCardPromptBuilder.buildPrompt(
+                req.getCardType(), req.getTitle(), entity, childEntities, relatedEntities);
+
+        // 5. 调用 LLM
+        try {
+            ChatLanguageModel model = ModelProvider.getChatModel();
+            String response = model.generate(prompt);
+
+            // 6. 解析响应
+            return KnowledgeCardRespParser.parse(response);
+        } catch (Exception e) {
+            log.warn("LLM call failed for knowledge card generation: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private List<WikiEntity> getRelatedEntities(String entityId) {
+        List<WikiLink> links = linkService.getLinksByEntity(entityId);
+        List<WikiEntity> relatedEntities = new ArrayList<>();
+        for (WikiLink link : links) {
+            String relatedId = entityId.equals(link.getSourceEntityId())
+                    ? link.getTargetEntityId()
+                    : link.getSourceEntityId();
+            WikiEntity related = entityService.getEntityById(relatedId);
+            if (related != null) {
+                relatedEntities.add(related);
+            }
+        }
+        return relatedEntities;
     }
 
     private static class WikiKnowledgeCardRowMapper implements RowMapper<WikiKnowledgeCard> {
