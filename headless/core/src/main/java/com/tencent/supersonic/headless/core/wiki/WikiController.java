@@ -411,7 +411,7 @@ public class WikiController {
             @RequestBody KnowledgeCardGenerateReq req) {
         BaseResp<KnowledgeCardGenerateResp> resp = new BaseResp<>();
         try {
-            if (req.getEntityId() == null || req.getEntityId().isEmpty()) {
+            if (req.getEntityId() == null || req.getEntityId().trim().isEmpty()) {
                 resp.setSuccess(false);
                 resp.setMessage("entityId is required");
                 return resp;
