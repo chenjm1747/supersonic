@@ -118,7 +118,7 @@ const KnowledgeCardSection: React.FC<KnowledgeCardSectionProps> = ({ selectedEnt
     const title = form.getFieldValue('title');
     const cardType = form.getFieldValue('cardType');
 
-    if (!entityId || (!title && !cardType)) {
+    if (!entityId) {
       return;
     }
 
@@ -151,6 +151,7 @@ const KnowledgeCardSection: React.FC<KnowledgeCardSectionProps> = ({ selectedEnt
     }
     setEditingCard(null);
     form.resetFields();
+    form.setFieldsValue({ entityId: selectedEntity.id });
     setSelectedEntityId(selectedEntity.id);
     setModalVisible(true);
   };
