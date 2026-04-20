@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card,
   List,
@@ -13,6 +13,7 @@ import {
   message,
   Popconfirm,
   Empty,
+  Pagination,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
 import {
@@ -22,13 +23,24 @@ import {
   createKnowledgeCard,
   updateKnowledgeCard,
   deleteKnowledgeCard,
+  generateKnowledgeCard,
+  getEntities,
+  WikiEntity,
 } from '@/services/wiki';
 
 const { Option } = Select;
 const { TextArea } = Input;
+const PAGE_SIZE = 10;
 
 interface KnowledgeCardSectionProps {
   selectedEntity: GraphNode | null;
+}
+
+interface KnowledgeCardsResponse {
+  cards: WikiKnowledgeCard[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 const cardTypes = [
@@ -46,23 +58,47 @@ const KnowledgeCardSection: React.FC<KnowledgeCardSectionProps> = ({ selectedEnt
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCard, setEditingCard] = useState<WikiKnowledgeCard | null>(null);
   const [form] = Form.useForm();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCards, setTotalCards] = useState(0);
+  const [entityList, setEntityList] = useState<WikiEntity[]>([]);
+  const [selectedEntityId, setSelectedEntityId] = useState<string>('');
+  const [generating, setGenerating] = useState(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (selectedEntity) {
-      fetchCards();
+      setCurrentPage(1); // Reset to first page when entity changes
+      fetchCards(1);
     } else {
       setCards([]);
+      setTotalCards(0);
     }
   }, [selectedEntity]);
 
-  const fetchCards = async () => {
+  useEffect(() => {
+    const fetchEntities = async () => {
+      try {
+        const resp = await getEntities();
+        if (resp.success && resp.data) {
+          setEntityList(resp.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch entities:', error);
+      }
+    };
+    fetchEntities();
+  }, []);
+
+  const fetchCards = async (page: number = 1) => {
     if (!selectedEntity) return;
 
     setLoading(true);
     try {
-      const resp = await getKnowledgeCards(selectedEntity.id);
+      const resp = await getKnowledgeCards(selectedEntity.id, page, PAGE_SIZE);
       if (resp.success && resp.data) {
-        setCards(resp.data);
+        const data = resp.data as KnowledgeCardsResponse;
+        setCards(data.cards || []);
+        setTotalCards(data.total || 0);
       }
     } catch (error) {
       console.error('Failed to fetch knowledge cards:', error);
@@ -72,6 +108,42 @@ const KnowledgeCardSection: React.FC<KnowledgeCardSectionProps> = ({ selectedEnt
     }
   };
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    fetchCards(page);
+  };
+
+  const triggerAutoGenerate = useCallback(async () => {
+    const entityId = form.getFieldValue('entityId');
+    const title = form.getFieldValue('title');
+    const cardType = form.getFieldValue('cardType');
+
+    if (!entityId || (!title && !cardType)) {
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const resp = await generateKnowledgeCard({ entityId, cardType, title });
+      if (resp.success && resp.data) {
+        const generated = resp.data;
+        form.setFieldsValue({
+          title: generated.title || title,
+          cardType: generated.cardType || cardType,
+          content: generated.content,
+          confidence: generated.confidence ? generated.confidence * 100 : 90,
+          tags: generated.tags?.join(', '),
+          extractedFrom: generated.extractedFrom?.join(', '),
+        });
+      }
+    } catch (error) {
+      // 静默处理，不显示错误
+      console.debug('Auto generate skipped:', error);
+    } finally {
+      setGenerating(false);
+    }
+  }, [form]);
+
   const handleCreate = () => {
     if (!selectedEntity) {
       message.warning('请先选择一个实体');
@@ -79,13 +151,16 @@ const KnowledgeCardSection: React.FC<KnowledgeCardSectionProps> = ({ selectedEnt
     }
     setEditingCard(null);
     form.resetFields();
+    setSelectedEntityId(selectedEntity.id);
     setModalVisible(true);
   };
 
   const handleEdit = (card: WikiKnowledgeCard) => {
     setEditingCard(card);
+    setSelectedEntityId(card.entityId);
     form.setFieldsValue({
       ...card,
+      entityId: card.entityId,
       confidence: card.confidence ? card.confidence * 100 : 90,
       tags: card.tags?.join(', '),
       extractedFrom: card.extractedFrom?.join(', '),
@@ -112,7 +187,7 @@ const KnowledgeCardSection: React.FC<KnowledgeCardSectionProps> = ({ selectedEnt
       const values = await form.validateFields();
       const card: WikiKnowledgeCard = {
         ...values,
-        entityId: selectedEntity?.id || editingCard?.entityId || '',
+        entityId: values.entityId || selectedEntity?.id || editingCard?.entityId || '',
         confidence: values.confidence / 100,
         tags: values.tags ? values.tags.split(',').map((t: string) => t.trim()) : [],
         extractedFrom: values.extractedFrom
@@ -190,6 +265,7 @@ const KnowledgeCardSection: React.FC<KnowledgeCardSectionProps> = ({ selectedEnt
                     <Space>
                       <Tag color={getTypeColor(card.cardType)}>{getTypeLabel(card.cardType)}</Tag>
                       {card.title && <span>{card.title}</span>}
+                      {card.status === 'AUTO_GENERATED' && <Tag color="blue">自动生成</Tag>}
                     </Space>
                   }
                   actions={[
@@ -239,6 +315,19 @@ const KnowledgeCardSection: React.FC<KnowledgeCardSectionProps> = ({ selectedEnt
               </List.Item>
             )}
           />
+
+          {totalCards > PAGE_SIZE && (
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <Pagination
+                current={currentPage}
+                pageSize={PAGE_SIZE}
+                total={totalCards}
+                onChange={handlePageChange}
+                showSizeChanger={false}
+                showQuickJumper
+              />
+            </div>
+          )}
         </>
       )}
 
@@ -250,6 +339,32 @@ const KnowledgeCardSection: React.FC<KnowledgeCardSectionProps> = ({ selectedEnt
         width={600}
       >
         <Form form={form} layout="vertical">
+          <Form.Item
+            name="entityId"
+            label="关联实体"
+            rules={[{ required: true, message: '请选择关联实体' }]}
+          >
+            <Select
+              placeholder="请选择关联实体"
+              showSearch
+              allowClear
+              onChange={() => {
+                if (debounceTimerRef.current) {
+                  clearTimeout(debounceTimerRef.current);
+                }
+                debounceTimerRef.current = setTimeout(() => {
+                  triggerAutoGenerate();
+                }, 500);
+              }}
+            >
+              {entityList.map((entity) => (
+                <Option key={entity.entityId} value={entity.entityId}>
+                  {entity.displayName || entity.name}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
           <Form.Item
             name="cardType"
             label="卡片类型"
@@ -290,6 +405,21 @@ const KnowledgeCardSection: React.FC<KnowledgeCardSectionProps> = ({ selectedEnt
 
           <Form.Item name="extractedFrom" label="来源">
             <Input placeholder="知识来源，如：表结构分析、业务文档等" />
+          </Form.Item>
+
+          <Form.Item>
+            <Button
+              type="default"
+              loading={generating}
+              onClick={() => {
+                if (debounceTimerRef.current) {
+                  clearTimeout(debounceTimerRef.current);
+                }
+                triggerAutoGenerate();
+              }}
+            >
+              AI 自动生成
+            </Button>
           </Form.Item>
         </Form>
       </Modal>
