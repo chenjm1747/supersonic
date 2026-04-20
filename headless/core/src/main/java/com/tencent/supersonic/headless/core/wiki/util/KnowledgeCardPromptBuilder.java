@@ -1,13 +1,18 @@
 package com.tencent.supersonic.headless.core.wiki.util;
 
 import com.tencent.supersonic.headless.core.wiki.dto.WikiEntity;
+import lombok.experimental.UtilityClass;
 
 import java.util.List;
 
+@UtilityClass
 public class KnowledgeCardPromptBuilder {
 
     public static String buildPrompt(String cardType, String title, WikiEntity entity,
             List<WikiEntity> childEntities, List<WikiEntity> relatedEntities) {
+        if (entity == null) {
+            throw new IllegalArgumentException("entity must not be null");
+        }
         StringBuilder prompt = new StringBuilder();
         prompt.append("你是一个知识卡片生成助手。请根据以下信息生成知识卡片内容。\n\n");
 

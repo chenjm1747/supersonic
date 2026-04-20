@@ -1,8 +1,9 @@
 package com.tencent.supersonic.headless.core.wiki.util;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tencent.supersonic.common.util.JsonUtil;
 import com.tencent.supersonic.headless.core.wiki.dto.KnowledgeCardGenerateResp;
+import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
@@ -10,9 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
+@UtilityClass
 public class KnowledgeCardRespParser {
-
-    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     public static KnowledgeCardGenerateResp parse(String jsonResponse) {
         KnowledgeCardGenerateResp resp = new KnowledgeCardGenerateResp();
@@ -27,7 +27,7 @@ public class KnowledgeCardRespParser {
                 }
             }
 
-            JsonNode root = objectMapper.readTree(jsonStr);
+            JsonNode root = JsonUtil.readTree(jsonStr);
 
             if (root.has("title")) {
                 resp.setTitle(root.get("title").asText());
@@ -52,7 +52,7 @@ public class KnowledgeCardRespParser {
                 resp.setExtractedFrom(sources);
             }
         } catch (Exception e) {
-            log.warn("Failed to parse LLM response: {}", e.getMessage());
+            log.warn("Failed to parse LLM response", e);
         }
         return resp;
     }
